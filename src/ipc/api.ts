@@ -1,0 +1,40 @@
+import { invoke } from "@tauri-apps/api/core";
+import type { AgentMeta, RelayConfig, AppConfig, ApplyResult, ProxyStatus } from "../types/models";
+import type { UsageSummary, DailyUsage, LogEntry, PerModelUsage, ToolStatus } from "../types/models";
+export type { UsageSummary, DailyUsage, LogEntry, PerModelUsage, ToolStatus };
+
+export async function getConfig(): Promise<AppConfig> { return invoke<AppConfig>("get_config"); }
+export async function saveConfig(cfg: AppConfig): Promise<void> { return invoke<void>("save_config", { cfg }); }
+export async function getAgentList(): Promise<AgentMeta[]> { return invoke<AgentMeta[]>("get_agent_list"); }
+export async function applyAgentConfig(cfg: AppConfig): Promise<ApplyResult> { return invoke<ApplyResult>("apply_agent_config", { cfg }); }
+
+export interface ShellInfo { config_file: string; reload_cmd: string; platform_os: string; }
+export async function getShellInfo(): Promise<ShellInfo> { return invoke<ShellInfo>("get_shell_info"); }
+
+export async function writeToolConfigs(cfg: AppConfig): Promise<string> { return invoke<string>("write_tool_configs", { cfg }); }
+
+// Relay CRUD
+export async function addRelay(cfg: AppConfig, name: string, url: string, key: string): Promise<AppConfig> { return invoke<AppConfig>("add_relay", { cfg, name, url, key }); }
+export async function updateRelay(cfg: AppConfig, oldName: string, name: string, url: string, key: string): Promise<AppConfig> { return invoke<AppConfig>("update_relay", { cfg, oldName, name, url, key }); }
+export async function deleteRelay(cfg: AppConfig, name: string): Promise<AppConfig> { return invoke<AppConfig>("delete_relay", { cfg, name }); }
+
+// Proxy
+export async function getProxyStatus(): Promise<ProxyStatus[]> { return invoke<ProxyStatus[]>("get_proxy_status"); }
+export async function startProxy(name: string): Promise<ProxyStatus> { return invoke<ProxyStatus>("start_proxy", { name }); }
+export async function stopProxy(name: string): Promise<ProxyStatus> { return invoke<ProxyStatus>("stop_proxy", { name }); }
+export async function restartProxy(name: string): Promise<ProxyStatus> { return invoke<ProxyStatus>("restart_proxy", { name }); }
+
+export async function getAppAutostartStatus(): Promise<{ enabled: boolean }> { return invoke<{ enabled: boolean }>("get_app_autostart_status"); }
+export async function setAppAutostart(enabled: boolean): Promise<{ enabled: boolean }> { return invoke<{ enabled: boolean }>("set_app_autostart", { enabled }); }
+export async function quitApp(): Promise<void> { return invoke<void>("quit_app"); }
+export async function hideMainWindow(): Promise<void> { return invoke<void>("hide_main_window"); }
+
+// Usage
+export async function getUsageSummary(): Promise<UsageSummary> { return invoke<UsageSummary>("get_usage_summary"); }
+export async function getDailyUsage(days: number): Promise<DailyUsage[]> { return invoke<DailyUsage[]>("get_daily_usage", { days }); }
+export async function getRecentLogs(limit: number): Promise<LogEntry[]> { return invoke<LogEntry[]>("get_recent_logs", { limit }); }
+export async function getPerModelUsage(): Promise<PerModelUsage[]> { return invoke<PerModelUsage[]>("get_per_model_usage"); }
+export async function importUsageData(): Promise<number> { return invoke<number>("import_usage_data"); }
+
+// Tool check
+export async function checkTools(force?: boolean): Promise<ToolStatus[]> { return invoke<ToolStatus[]>("check_tools", { force: force ?? false }); }
