@@ -14,27 +14,18 @@ use crate::proxy_manager::ProxyManager;
 
 const TRAY_ID: &str = "main";
 
-// 16x16 tray icons — real RGBA PNG generated at build time
-fn tray_icon_bytes(active: bool) -> &'static [u8] {
-    if active {
-        // 16x16 green (#30d158) dot RGBA PNG
-        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\x1f\xf3\xffa\x00\x00\x00\x19IDATx\x9cc0\xb8\x18\xf1\x9f\x12\xcc0j\xc0\xa8\x01\xa3\x06\x0c\x17\x03\x00\x11nX\x1f1\x98Ws\x00\x00\x00\x00IEND\xaeB`\x82"
-    } else {
-        // 16x16 gray (#8e8e93) dot RGBA PNG
-        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\x1f\xf3\xffa\x00\x00\x00\x19IDATx\x9cc\xe8\xeb\x9b\xfc\x9f\x12\xcc0j\xc0\xa8\x01\xa3\x06\x0c\x17\x03\x00\x19\xaf\xae\x1f\x84\xd8\x8b\xbe\x00\x00\x00\x00IEND\xaeB`\x82"
-    }
-}
-
-fn load_icon(bytes: &[u8]) -> Result<Image<'static>, Box<dyn std::error::Error>> {
-    let img = image::load_from_memory(bytes)?;
+// 16x16 tray icon — embedded at compile time
+fn load_tray_icon() -> Option<Image<'static>> {
+    let data = include_bytes!("../icons/tray-icon.png");
+    let img = image::load_from_memory(data).ok()?;
     let rgba = img.to_rgba8();
-    let w = rgba.width();
-    let h = rgba.height();
-    Ok(Image::new_owned(rgba.into_raw(), w, h))
+    let (w, h) = (rgba.width(), rgba.height());
+    Some(Image::new_owned(rgba.into_raw(), w, h))
 }
 
 pub fn setup(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let icon = load_icon(tray_icon_bytes(false))?;
+    let icon = load_tray_icon()
+        .unwrap_or_else(|| Image::new_owned(vec![0; 16*16*4], 16, 16));
 
     let summary = MenuItem::with_id(app, "summary", "CC-Gate · 加载中…", false, None::<&str>)?;
     let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
@@ -52,7 +43,7 @@ pub fn setup(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
-        .icon_as_template(true)
+        .icon_as_template(false)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .tooltip("CC-Gate")
@@ -109,10 +100,9 @@ pub async fn refresh(app: &AppHandle) {
 
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let _ = tray.set_menu(Some(menu));
-        let any_running = active > 0;
-        if let Ok(icon) = load_icon(tray_icon_bytes(any_running)) {
+        if let Some(icon) = load_tray_icon() {
             let _ = tray.set_icon(Some(icon));
-            let _ = tray.set_icon_as_template(true);
+            let _ = tray.set_icon_as_template(false);
         }
         let tip = format!("CC-Gate · 活跃 {active} / 共 {total}");
         let _ = tray.set_tooltip(Some(tip));

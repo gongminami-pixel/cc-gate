@@ -11,6 +11,7 @@ import PageRelayKeys from "./components/PageRelayKeys.vue";
 import PageTools from "./components/PageTools.vue";
 import PageStartup from "./components/PageStartup.vue";
 import PageAppearance from "./components/PageAppearance.vue";
+import PageAbout from "./components/PageAbout.vue";
 import { useAppConfig } from "./composables/useAppConfig";
 import { useTheme } from "./composables/useTheme";
 
@@ -45,6 +46,7 @@ onMounted(async () => { await refresh(); });
         <PageTools     v-else-if="currentPage === 'tools'" />
         <PageStartup   v-else-if="currentPage === 'startup'"  :config="config" />
         <PageAppearance v-else-if="currentPage === 'appearance'" />
+        <PageAbout      v-else-if="currentPage === 'settings'" />
       </template>
     </main>
     <Toaster />
