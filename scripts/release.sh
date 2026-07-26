@@ -9,113 +9,90 @@ if [ -z "$TOKEN" ]; then
   echo
 fi
 
-export TOKEN
-export REPO="gongminami-pixel/cc-gate"
-export TAG="v0.1.0"
-export VERSION="0.1.0"
-export DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.0_x64.dmg"
-export EXE="src-tauri/target/x86_64-pc-windows-msvc/release/cc-gate.exe"
-export MAC_SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
-export WIN_SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
+REPO="gongminami-pixel/cc-gate"
+TAG="v0.1.0"
+VERSION="0.1.0"
+DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.0_x64.dmg"
+EXE="src-tauri/target/x86_64-pc-windows-msvc/release/cc-gate.exe"
+MAC_SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
+WIN_SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
 
 echo "=== SHA256 ==="
 echo "Mac DMG:  $MAC_SHA"
 echo "Win exe:  $WIN_SHA"
 echo ""
 
-python3 - "$TOKEN" "$REPO" "$TAG" "$VERSION" "$DMG" "$EXE" "$MAC_SHA" "$WIN_SHA" << 'PYEOF'
-import subprocess, json, os, sys, urllib.request, urllib.error
-
-token = sys.argv[1]
-repo = sys.argv[2]
-tag = sys.argv[3]
-version = sys.argv[4]
-dmg = sys.argv[5]
-exe = sys.argv[6]
-mac_sha = sys.argv[7]
-win_sha = sys.argv[8]
-
-def api(method, url, data=None, is_binary=False):
-    req = urllib.request.Request(url, method=method)
-    req.add_header("Authorization", f"token {token}")
-    if data is not None:
-        if is_binary:
-            req.add_header("Content-Type", "application/octet-stream")
-            req.data = data
-        else:
-            req.add_header("Content-Type", "application/json")
-            req.data = json.dumps(data).encode()
-    try:
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        try: return json.loads(body)
-        except: return {"message": body, "status": e.code}
+AUTH="Authorization: token $TOKEN"
+API="https://api.github.com/repos/$REPO"
 
 # Check if release already exists
-print("Checking existing release...")
-existing = api("GET", f"https://api.github.com/repos/{repo}/releases/tags/{tag}")
+echo "Checking existing release..."
+EXISTING_ID=$(curl -sS -H "$AUTH" "$API/releases/tags/$TAG" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
 
-if "id" in existing:
-    print(f"Release already exists (id={existing['id']}), reusing...")
-    upload_url = existing["upload_url"].split("{")[0]
-else:
-    body = f"""## Download
+if [ -n "$EXISTING_ID" ]; then
+  echo "Release already exists (id=$EXISTING_ID), fetching upload URL..."
+  UPLOAD_URL=$(curl -sS -H "$AUTH" "$API/releases/$EXISTING_ID" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].split('{')[0])")
+else
+  # Write release body JSON to temp file to avoid shell escaping hell
+  BODY_FILE=$(mktemp)
+  python3 << PYEOF > "$BODY_FILE"
+import json
+body = """## Download
 
 | Platform | File | SHA256 |
 |----------|------|--------|
-| macOS | [CC-Gate_{version}_x64.dmg](https://github.com/{repo}/releases/download/{tag}/CC-Gate_{version}_x64.dmg) | `{mac_sha}` |
-| Windows | [cc-gate.exe](https://github.com/{repo}/releases/download/{tag}/cc-gate.exe) | `{win_sha}` |
+| macOS | [CC-Gate_${VERSION}_x64.dmg](https://github.com/${REPO}/releases/download/${TAG}/CC-Gate_${VERSION}_x64.dmg) | \`${MAC_SHA}\` |
+| Windows | [cc-gate.exe](https://github.com/${REPO}/releases/download/${TAG}/cc-gate.exe) | \`${WIN_SHA}\` |
 
 ### Verify
 
-```bash
+\`\`\`bash
 # macOS
-shasum -a 256 CC-Gate_{version}_x64.dmg
+shasum -a 256 CC-Gate_${VERSION}_x64.dmg
 # Windows (PowerShell)
 Get-FileHash cc-gate.exe -Algorithm SHA256
-```
+\`\`\`
 
 ### Changes
 
 - Tool detection with progressive loading (one-by-one live status)
-- Claude Opus 4.5 -> Opus 5 (context 200K -> 1M)
-- GPT-5.1 Codex -> GPT-5.6
-- GLM-5.2 context 128K -> 1M
+- Claude Opus 4.5 → Opus 5 (context 200K → 1M)
+- GPT-5.1 Codex → GPT-5.6
+- GLM-5.2 context 128K → 1M
 - Remote model catalog auto-update (models-catalog.json from GitHub)
-- README with open-source documentation"""
+- README with open-source documentation
+"""
+print(json.dumps({"tag_name": "${TAG}", "name": "CC-Gate ${TAG}", "body": body, "draft": False}))
+PYEOF
 
-    print("Creating release...")
-    release = api("POST", f"https://api.github.com/repos/{repo}/releases", {
-        "tag_name": tag,
-        "name": f"CC-Gate {tag}",
-        "body": body,
-        "draft": False,
-    })
-    if "upload_url" not in release:
-        print(f"ERROR creating release: {json.dumps(release, indent=2)}")
-        sys.exit(1)
-    upload_url = release["upload_url"].split("{")[0]
-    print(f"Release created: {release['html_url']}")
+  echo "Creating release..."
+  RELEASE_RESP=$(curl -sS -X POST -H "$AUTH" -H "Content-Type: application/json" --data-binary "@$BODY_FILE" "$API/releases")
+  rm -f "$BODY_FILE"
+
+  HTML_URL=$(echo "$RELEASE_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('html_url',''))")
+  UPLOAD_URL=$(echo "$RELEASE_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].split('{')[0])")
+  echo "Release created: $HTML_URL"
+fi
+
+echo ""
 
 # Upload Mac DMG
-print(f"Uploading Mac DMG ({os.path.getsize(dmg)} bytes)...")
-with open(dmg, "rb") as f:
-    result = api("POST", f"{upload_url}?name=CC-Gate_{version}_x64.dmg", f.read(), is_binary=True)
-    if "name" in result:
-        print(f"  OK: {result['name']} ({result.get('size', '?')} bytes)")
-    else:
-        print(f"  FAIL: {json.dumps(result)}")
+echo "Uploading Mac DMG ($(ls -lh "$DMG" | awk '{print $5}'))..."
+curl -sS -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
+  --data-binary "@$DMG" \
+  "$UPLOAD_URL?name=CC-Gate_${VERSION}_x64.dmg" > /dev/null
+echo "  OK"
 
 # Upload Windows exe
-print(f"Uploading Windows exe ({os.path.getsize(exe)} bytes)...")
-with open(exe, "rb") as f:
-    result = api("POST", f"{upload_url}?name=cc-gate.exe", f.read(), is_binary=True)
-    if "name" in result:
-        print(f"  OK: {result['name']} ({result.get('size', '?')} bytes)")
-    else:
-        print(f"  FAIL: {json.dumps(result)}")
+echo "Uploading Windows exe ($(ls -lh "$EXE" | awk '{print $5}'))..."
+curl -sS -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
+  --data-binary "@$EXE" \
+  "$UPLOAD_URL?name=cc-gate.exe" > /dev/null
+echo "  OK"
 
-print(f"\nDone: https://github.com/{repo}/releases/tag/{tag}")
-PYEOF
+echo ""
+echo "Done: https://github.com/$REPO/releases/tag/$TAG"
+echo ""
+echo "=== SHA256 (for reference) ==="
+echo "Mac:  $MAC_SHA"
+echo "Win:  $WIN_SHA"
