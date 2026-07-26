@@ -82,3 +82,33 @@ _Append-only. Each entry captures the "why" behind a choice._
 **Evidence**: types.rs:147-148, models-catalog.json:53-58, config_writer.rs:594
 **Supersedes**: 旧模型版本参数
 **Impact**: alias 名不变（short() 仍返回 "opus"/"gpt"），但 slug 和参数已是新版
+
+## 2026-07-26T14:20:00+08:00 — 3 代理 App 打开即无条件启动（autostart 开关废弃）
+**Why**: 用户要求软件打开时 3 个代理始终运行监听，不需要手动开关
+**What**: proxy_manager.rs start_enabled() 无条件启动 3 代理；apply_agent_config 无条件重启 3 代理
+**Evidence**: proxy_manager.rs:107-115, commands/config.rs:31-51
+**Supersedes**: 旧 autostart 开关控制启动逻辑
+
+## 2026-07-26T14:20:00+08:00 — node 路径自动发现 + mimo2codex 同 bin 目录查找
+**Why**: macOS GUI app 不继承 shell PATH；nvm 多版本并存时需找对版本（有 node + mimo2codex 的）
+**What**: find_node() 扫 nvm/fnm/volta/Homebrew，优先选有 node+mimo2codex 的版本；proxy_script_for() 中 mimo2codex 走 bin_dir
+**Evidence**: proxy_manager.rs:17-100
+**Supersedes**: 裸 "node" 命令（永远找不到）+ 裸 "mimo2codex" 脚本名（当模块找→Module not found）
+
+## 2026-07-26T14:20:00+08:00 — providers.json 加 defaultModel 字段
+**Why**: mimo2codex 的 genericLoader 要求每个 provider 必须有 defaultModel，否则启动退出码 2
+**What**: config_writer.rs write_providers() 中每个 provider entry 加 "defaultModel": models[0].slug
+**Evidence**: config_writer.rs:95-107
+**Supersedes**: 旧 providers.json（无 defaultModel→mimo2codex 启动失败）
+
+## 2026-07-26T14:20:00+08:00 — 首页应用按钮断连保护
+**Why**: 用户点"应用"会重启 claude-proxy→断开当前 CC Chat 会话
+**What**: onApply() 前检测 claude-proxy 是否将重启→弹 window.confirm 警告
+**Evidence**: PageHome.vue:80-91
+**Supersedes**: 无保护→点应用直接断连
+
+## 2026-07-26T14:20:00+08:00 — 代理存活性双验证（try_wait + 端口监听）
+**Why**: spawn() 成功≠进程真活着；旧 CC-Gate 崩溃后遗留进程占端口
+**What**: status() 加 try_wait 清理死 Child + port_is_listening() TCP connect 兜底；start() 前 lsof kill 清端口
+**Evidence**: proxy_manager.rs:104-119, 216-260
+**Supersedes**: 旧 HashMap-only 检测（假活）

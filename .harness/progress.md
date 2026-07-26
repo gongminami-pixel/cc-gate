@@ -119,3 +119,28 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 追加 progress 条目（Release 上传成功）
 - **outcome**: L2 状态更新
 - **next**: 用户继续测试
+
+## 2026-07-26T14:20:00+08:00 — work: 启动项代理状态 + 首页断连保护 + provider defaultModel 修复
+- **touched**: src-tauri/src/proxy_manager.rs src-tauri/src/commands/config.rs src-tauri/src/commands/proxy.rs src-tauri/src/config_writer.rs src/components/PageStartup.vue src/components/PageHome.vue
+- **action**:
+  - proxy_manager.rs 全面重写：
+    - find_node() 优先搜寻有 mimo2codex 的 nvm 版本（之前按字母排序可能选错版本）
+    - kill_port_occupant() 启动前 lsof kill 僵尸进程释放端口
+    - port_is_listening() TCP connect 双验证存活性
+    - start() spawn 后 500ms 等待 + try_wait 检测即死进程
+    - status() try_wait 清理死 Child + 端口��听兜底（不在 HashMap 但端口活着→仍报 running）
+  - 启动时无条件拉 3 代理（不再判断 autostart 开关）
+  - 启动前先 write_providers() 确保 defaultModel 完整（不写则 mimo2codex 退出码 2）
+  - 去掉 PageStartup.vue "代理进程"开关栏，保留"代理状态"栏 + 3 条功能描述
+  - 代理状态呼吸灯动画 (pulse-dot 2s)
+  - PageHome.vue 首页点"应用"前检测 claude-proxy 是否即将重启→弹 confirm 防断连
+  - config_writer.rs providers.json 每个 provider 加 "defaultModel" 字段
+  - proxy_script_for() 统一入口，mimo2codex 走 bin_dir 同目录
+- **outcome**: 3 代理 App 打开即全起，启动页实时显示运行状态，首页断连保护
+- **next**: 同步加提交 + 双端构建 + GitHub Release 更新
+
+## 2026-07-26T14:20:00+08:00 — handoff_ready: 同步
+- **touched**: .harness/waypoints/ .harness/handoff.md .harness/progress.md .harness/decisions.md
+- **action**: 落 waypoint + 重写 handoff + 追加 progress/decisions
+- **outcome**: L2 状态更新
+- **next**: git 提交 + push + 双端构建

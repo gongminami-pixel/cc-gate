@@ -1,6 +1,6 @@
 # Harness Handoff
 
-_Last updated: 2026-07-26T12:15:00+08:00_
+_Last updated: 2026-07-26T14:20:00+08:00_
 
 ## Goal
 
@@ -9,52 +9,46 @@ _Last updated: 2026-07-26T12:15:00+08:00_
 ## State snapshot
 
 - **Branch**: main
-- **Commit**: 1588cb6 chore: 发布脚本
-- **Uncommitted**: 无
+- **Commit**: 40bf058 docs(harness): 同步 — Release 上传完成 + 模型参数更新
+- **Uncommitted**: proxy_manager.rs 重写 + PageStartup.vue 代理状态栏 + PageHome.vue 断连保护 + config_writer.rs defaultModel 修复 + commands 清理
 - **Tag**: v0.1.0
 
 ## Context you must load (JIT)
 
-- `models-catalog.json` — 远程模型目录源（9 个模型，GitHub raw）
-- `src-tauri/src/model_catalog.rs` — 远程拉取+缓存+合并逻辑
-- `src-tauri/src/tool_check.rs` — check_one() 逐个检测 + save_to_cache()
-- `src-tauri/src/types.rs` — 数据模型（10 Agent + 9 ModelDef + RelayConfig）
-- `src-tauri/src/config_writer.rs` — 配置写入核心
-- `README.md` — 开源首页说明文档
-- `scripts/release.sh` — GitHub Release 发布脚本
+- `src-tauri/src/proxy_manager.rs` — 代理管理核心：node 路径发现 + 端口占用清理 + 双验证存活性
+- `src-tauri/src/config_writer.rs` — 配置写入（含 providers.json defaultModel 新增）
+- `src/components/PageStartup.vue` — 启动页：自启 + 代理状态实时显示
+- `src/components/PageHome.vue` — 首页：断连保护
+- `models-catalog.json` — 远程模型目录源
 
 ## What works
 
-- ✅ 10 Agent 全配置���入（Cursor 除外）
-- ✅ **工具检测渐进式加载**——前端逐个调用 checkOneTool()，6 条逐一亮起
-- ✅ **远程模型目录自动更新**——GitHub raw → 本地缓存 → 合并
-- ✅ 首页"检查模型更新"按钮 + 新模型"新"badge
-- ✅ providers.json 分组路由（direct/relay）
-- ✅ Shell alias 自动注入（bash/zsh/PS5/PS7）
-- ✅ Relay 中转站 + API Key 管理（22 提供商）
-- ✅ 启动项管理（3 代理 + App，macOS launchd）
-- ✅ Hermes / OpenClaw / Reasonix 配置写入
-- ✅ macOS + Windows 双端构建
-- ✅ **模型参数已更新**：Opus 5 (1M), GPT-5.6, GLM 1M
-- ✅ v0.1.0 tag 已推送 GitHub
+- ✅ **3 代理无条件下启动**：App 打开即全起（mimo2codex:8688, claude-proxy:8689, chat-proxy:8690）
+- ✅ **代理状态实时显示**：启动页"代理状态"栏，3 秒轮询，绿色呼吸灯动画
+- ✅ **代理存活性双验证**：try_wait + TCP connect，防假活
+- ✅ **node 路径自动发现**：nvm（优先有 mimo2codex 的版本）→ fnm → volta → Homebrew
+- ✅ **端口占用自动清理**：启动前 lsof kill 占端口的僵尸进程
+- ✅ **启动前写配置**：先 write_providers（保证 defaultModel 完整）再起代理
+- ✅ **首页断连保护**：即将重启 claude-proxy 时弹 confirm
+- ✅ 工具检测渐进式加载
+- ✅ 远程模型目录自动更新
+- ✅ GitHub Releases v0.1.0 已有 Mac DMG
 
 ## What's broken
 
-- ⚠️ Cursor：专有 API
-- ⚠️ OpenCode：项目级配置
-- ⚠️ GitHub Release 安装包尚未上传（需跑 release.sh）
-- ⚠️ 当前对话走 claude-proxy，点"应用"会断连
+- ⚠️ DMG 打包偶尔因旧 app 未退出失败（需先 pkill 再 build）
+- ⚠️ 用户说 mimicodex 码偶有显示问题（非本会话范围）
 
 ## Next actions (ordered)
 
-1. 模型参数进一步校准（qwen3.8 上下文、mimo 参数）
-2. OpenCode 配置策略调研
-3. 用户测试各 Agent 模型切换
+1. 双端构建 + GitHub Release 更新（即将执行）
+2. 模型参数校准（qwen3.8/mimo 上下文）
+3. OpenCode 配置策略调研
 
 ## Beware
 
-- 代理重启 = 杀死本对话（claude-proxy 是当前通道）
-- 远程 catalog URL: `https://raw.githubusercontent.com/gongminami-pixel/cc-gate/main/models-catalog.json`
-- `check_one_tool()` command 按名匹配：`"node"`, `"python3"`, `"codex"`, `"claude"`, `"aider"`, `"bash"`
-- release.sh 需要 GitHub token 在 macOS 钥匙串（`security find-internet-password -s github.com`）
-- `short()` 别名映射已更新：opus → `claude-opus-5`, gpt → `gpt-5.6`
+- **mimo2codex 路径**：跟 node 同一个 bin 目录（nvm 的 bin/mimo2codex），不是 `~/.mimo2codex/` 下的 .js 文件
+- **providers.json**：每个 provider 必须有 `defaultModel` 字段，不然 mimo2codex 启动报退出码 2
+- **macOS GUI PATH**：Tauri app 不继承用户 shell PATH，所有外部命令须完整路径
+- **lsof kill**：启动代理前用 `lsof -ti :PORT` 杀占端口的旧进程
+- **v0.1.0 tag 已推送 GitHub**：release.sh 上传时会覆盖已有 assets
