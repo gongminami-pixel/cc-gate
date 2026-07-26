@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex, OnceLock};
-use tauri::{Emitter as _, Manager as _};
+use tauri::Manager as _;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
@@ -53,7 +53,7 @@ pub fn run() {
                 win.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         api.prevent_close();
-                        let _ = win_for_close.emit("ccgate://close-requested", ());
+                        let _ = win_for_close.hide();
                     }
                 });
             }
