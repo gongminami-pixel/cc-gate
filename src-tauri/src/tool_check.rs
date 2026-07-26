@@ -46,17 +46,18 @@ fn check_now() -> Vec<ToolStatus> {
 
 #[cfg(not(target_os = "windows"))]
 fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
-    // GUI apps don't inherit full shell PATH; use login shell.
-    // Redirect stderr to stdout — many CLI tools write version to stderr.
+    // GUI apps don't inherit user PATH (set in .zshrc). Source it explicitly,
+    // then run the command. Check exit code so "command not found"
+    // error messages aren't treated as version strings.
     let arg_str = std::iter::once(cmd).chain(args.iter().copied()).collect::<Vec<_>>().join(" ");
     Command::new("/bin/zsh")
-        .args(["-l", "-c", &format!("{arg_str} 2>&1")])
+        .args(["-c", &format!("source ~/.zshrc 2>/dev/null; {arg_str} 2>&1")])
         .output()
         .ok()
         .and_then(|o| {
+            if !o.status.success() { return None; }
             let raw = String::from_utf8_lossy(&o.stdout).trim().to_string();
             if raw.is_empty() { return None; }
-            // Take first non-empty line as version
             raw.lines().find(|l| !l.trim().is_empty()).map(|s| s.to_string())
         })
 }
