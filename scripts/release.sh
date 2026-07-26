@@ -9,38 +9,37 @@ if [ -z "$TOKEN" ]; then
   echo
 fi
 
-REPO="gongminami-pixel/cc-gate"
-TAG="v0.1.0"
-VERSION="0.1.0"
-DMG="src-tauri/target/release/bundle/dmg/CC-Gate_${VERSION}_x64.dmg"
-EXE="src-tauri/target/x86_64-pc-windows-msvc/release/cc-gate.exe"
+export TOKEN
+export REPO="gongminami-pixel/cc-gate"
+export TAG="v0.1.0"
+export VERSION="0.1.0"
+export DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.0_x64.dmg"
+export EXE="src-tauri/target/x86_64-pc-windows-msvc/release/cc-gate.exe"
+export MAC_SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
+export WIN_SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
 
 echo "=== SHA256 ==="
-MAC_SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
-WIN_SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
 echo "Mac DMG:  $MAC_SHA"
 echo "Win exe:  $WIN_SHA"
 echo ""
 
-# Use Python for API calls - easier error handling
-python3 << PYEOF
-import subprocess, json, os
+python3 - "$TOKEN" "$REPO" "$TAG" "$VERSION" "$DMG" "$EXE" "$MAC_SHA" "$WIN_SHA" << 'PYEOF'
+import subprocess, json, os, sys, urllib.request, urllib.error
 
-token = os.environ["TOKEN"]
-repo = os.environ["REPO"]
-tag = os.environ["TAG"]
-version = os.environ["VERSION"]
-dmg = os.environ["DMG"]
-exe = os.environ["EXE"]
-mac_sha = os.environ["MAC_SHA"]
-win_sha = os.environ["WIN_SHA"]
+token = sys.argv[1]
+repo = sys.argv[2]
+tag = sys.argv[3]
+version = sys.argv[4]
+dmg = sys.argv[5]
+exe = sys.argv[6]
+mac_sha = sys.argv[7]
+win_sha = sys.argv[8]
 
-def api(method, url, data=None, raw=False):
-    import urllib.request
+def api(method, url, data=None, is_binary=False):
     req = urllib.request.Request(url, method=method)
     req.add_header("Authorization", f"token {token}")
     if data is not None:
-        if isinstance(data, bytes):
+        if is_binary:
             req.add_header("Content-Type", "application/octet-stream")
             req.data = data
         else:
@@ -52,7 +51,7 @@ def api(method, url, data=None, raw=False):
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         try: return json.loads(body)
-        except: return {"message": body}
+        except: return {"message": body, "status": e.code}
 
 # Check if release already exists
 print("Checking existing release...")
@@ -62,8 +61,6 @@ if "id" in existing:
     print(f"Release already exists (id={existing['id']}), reusing...")
     upload_url = existing["upload_url"].split("{")[0]
 else:
-    # Create release
-    print("Creating release...")
     body = f"""## Download
 
 | Platform | File | SHA256 |
@@ -82,13 +79,14 @@ Get-FileHash cc-gate.exe -Algorithm SHA256
 
 ### Changes
 
-- Tool detection with progressive loading (one-by-one with live status)
+- Tool detection with progressive loading (one-by-one live status)
 - Claude Opus 4.5 -> Opus 5 (context 200K -> 1M)
 - GPT-5.1 Codex -> GPT-5.6
 - GLM-5.2 context 128K -> 1M
-- Remote model catalog auto-update (models-catalog.json from GitHub raw)
+- Remote model catalog auto-update (models-catalog.json from GitHub)
 - README with open-source documentation"""
 
+    print("Creating release...")
     release = api("POST", f"https://api.github.com/repos/{repo}/releases", {
         "tag_name": tag,
         "name": f"CC-Gate {tag}",
@@ -96,31 +94,28 @@ Get-FileHash cc-gate.exe -Algorithm SHA256
         "draft": False,
     })
     if "upload_url" not in release:
-        print(f"ERROR creating release: {release}")
-        exit(1)
+        print(f"ERROR creating release: {json.dumps(release, indent=2)}")
+        sys.exit(1)
     upload_url = release["upload_url"].split("{")[0]
     print(f"Release created: {release['html_url']}")
 
-# Upload assets
-print(f"Upload URL: {upload_url}")
-
-# Mac DMG
+# Upload Mac DMG
 print(f"Uploading Mac DMG ({os.path.getsize(dmg)} bytes)...")
 with open(dmg, "rb") as f:
-    result = api("POST", f"{upload_url}?name=CC-Gate_{version}_x64.dmg", f.read(), raw=True)
+    result = api("POST", f"{upload_url}?name=CC-Gate_{version}_x64.dmg", f.read(), is_binary=True)
     if "name" in result:
         print(f"  OK: {result['name']} ({result.get('size', '?')} bytes)")
     else:
-        print(f"  FAIL: {result}")
+        print(f"  FAIL: {json.dumps(result)}")
 
-# Windows exe
+# Upload Windows exe
 print(f"Uploading Windows exe ({os.path.getsize(exe)} bytes)...")
 with open(exe, "rb") as f:
-    result = api("POST", f"{upload_url}?name=cc-gate.exe", f.read(), raw=True)
+    result = api("POST", f"{upload_url}?name=cc-gate.exe", f.read(), is_binary=True)
     if "name" in result:
         print(f"  OK: {result['name']} ({result.get('size', '?')} bytes)")
     else:
-        print(f"  FAIL: {result}")
+        print(f"  FAIL: {json.dumps(result)}")
 
 print(f"\nDone: https://github.com/{repo}/releases/tag/{tag}")
 PYEOF
