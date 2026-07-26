@@ -33,7 +33,7 @@
       "display_name": "GLM-5.2",
       "provider": "glm",
       "enabled": true,
-      "context_window": 131072,
+      "context_window": 1000000,
       "max_output_tokens": 16384,
       "priority": 200,
       "default_reasoning_level": "high",
@@ -94,11 +94,11 @@
       "output_price_per_1k": 0.001
     },
     {
-      "slug": "claude-opus-4-5",
-      "display_name": "Claude Opus 4.5",
+      "slug": "claude-opus-5",
+      "display_name": "Claude Opus 5",
       "provider": "anthropic",
       "enabled": true,
-      "context_window": 200000,
+      "context_window": 1000000,
       "max_output_tokens": 32768,
       "priority": 50,
       "default_reasoning_level": "xhigh",
@@ -107,8 +107,8 @@
       "output_price_per_1k": 0.075
     },
     {
-      "slug": "gpt-5.1-codex",
-      "display_name": "GPT-5.1 Codex",
+      "slug": "gpt-5.6",
+      "display_name": "GPT-5.6",
       "provider": "openai",
       "enabled": true,
       "context_window": 1000000,

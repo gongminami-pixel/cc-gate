@@ -38,6 +38,8 @@ export async function importUsageData(): Promise<number> { return invoke<number>
 
 // Tool check
 export async function checkTools(force?: boolean): Promise<ToolStatus[]> { return invoke<ToolStatus[]>("check_tools", { force: force ?? false }); }
+export async function checkOneTool(name: string): Promise<ToolStatus | null> { return invoke<ToolStatus | null>("check_one_tool", { name }); }
+export async function saveToolCache(results: ToolStatus[]): Promise<void> { return invoke<void>("save_tool_cache", { results }); }
 
 // Model catalog
 export async function checkModelUpdates(): Promise<CheckUpdateResult> { return invoke<CheckUpdateResult>("check_model_updates"); }

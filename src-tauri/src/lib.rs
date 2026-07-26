@@ -120,6 +120,8 @@ pub fn run() {
             commands::usage::import_usage_data,
             commands::config::check_model_updates,
             check_tools,
+            check_one_tool,
+            save_tool_cache,
         ])
         .build(tauri::generate_context!())
         .expect("error while building CC-Gate");
@@ -189,4 +191,16 @@ fn check_tools(force: Option<bool>) -> Vec<crate::tool_check::ToolStatus> {
     } else {
         crate::tool_check::check_all()
     }
+}
+
+/// 逐条工具检测：前端逐个调用，每调用一次检测一个工具、返回一个结果
+#[tauri::command]
+fn check_one_tool(name: String) -> Option<crate::tool_check::ToolStatus> {
+    crate::tool_check::check_one(&name)
+}
+
+/// 渐进式检测完成后保存结果到缓存
+#[tauri::command]
+fn save_tool_cache(results: Vec<crate::tool_check::ToolStatus>) {
+    crate::tool_check::save_to_cache(results);
 }

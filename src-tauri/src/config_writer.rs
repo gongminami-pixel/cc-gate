@@ -590,7 +590,7 @@ fn short(slug: &str) -> &str { match slug {
     "deepseek-v4-pro" => "ds", "deepseek-v4-flash" => "ds-flash",
     "glm-5.2" => "glm", "qwen3.8-max-preview" => "qwen", "qwen-max" => "qwen-max",
     "mimo-v2.5-pro" => "mimo", "mimo-v2.5" => "mimo-v2.5",
-    "claude-opus-4-5" => "opus", "gpt-5.1-codex" => "gpt",
+    "claude-opus-5" => "opus", "gpt-5.6" => "gpt",
     _ => slug,
 }}
 fn codex_alias(s: &str) -> String { format!("codex-{}", short(s)) }

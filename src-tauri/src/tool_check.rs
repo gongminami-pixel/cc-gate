@@ -2,9 +2,9 @@
 
 use std::process::Command;
 use std::sync::OnceLock;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolStatus {
     pub name: String,       // display name
     pub command: String,    // binary to check, e.g. "codex", "node"
@@ -31,6 +31,26 @@ pub fn refresh() -> Vec<ToolStatus> {
     let mut guard = cache().lock().unwrap();
     *guard = check_now();
     guard.clone()
+}
+
+/// 渐进式检测：逐条执行检测并通过回调即时返回结果，最后更新缓存。
+/// 供前端 streaming command 使用——每个工具检测完就 emit 事件，用户不卡等。
+/// 将检测结果存入缓存（渐进式检测完成后调用）
+pub fn save_to_cache(results: Vec<ToolStatus>) {
+    let mut guard = cache().lock().unwrap();
+    *guard = results;
+}
+
+pub fn check_one(name: &str) -> Option<ToolStatus> {
+    match name {
+        "node" => Some(check_node_npm()),
+        "python3" => Some(check_python()),
+        "codex" => Some(check_codex()),
+        "claude" => Some(check_claude_code()),
+        "aider" => Some(check_aider()),
+        "bash" => Some(check_git_bash()),
+        _ => None,
+    }
 }
 
 fn check_now() -> Vec<ToolStatus> {

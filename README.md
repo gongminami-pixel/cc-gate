@@ -123,13 +123,13 @@ aider-ds        # Aider + DeepSeek V4 Pro
 |------|--------|--------|
 | DeepSeek V4 Pro | DeepSeek | 1M |
 | DeepSeek V4 Flash | DeepSeek | 1M |
-| GLM-5.2 | 智谱 AI | 128K |
+| GLM-5.2 | 智谱 AI | 1M |
 | Qwen3.8 Max Preview | 阿里云 | 1M |
 | Qwen-Max | 阿里云 | 128K |
 | MiMo V2.5 Pro | 小米 | 128K |
 | MiMo V2.5 | 小米 | 1M |
-| Claude Opus 4.5 | Anthropic | 200K |
-| GPT-5.1 Codex | OpenAI | 1M |
+| Claude Opus 5 | Anthropic | 1M |
+| GPT-5.6 | OpenAI | 1M |
 
 > 更多模型通过 `models-catalog.json` 远程更新，无需重装软件。
 
