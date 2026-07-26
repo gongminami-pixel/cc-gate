@@ -43,7 +43,7 @@ pub fn setup(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
-        .icon_as_template(true)
+        .icon_as_template(false)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .tooltip("CC-Gate")
@@ -102,7 +102,7 @@ pub async fn refresh(app: &AppHandle) {
         let _ = tray.set_menu(Some(menu));
         if let Some(icon) = load_tray_icon() {
             let _ = tray.set_icon(Some(icon));
-            let _ = tray.set_icon_as_template(true);
+            let _ = tray.set_icon_as_template(false);
         }
         let tip = format!("CC-Gate · 活跃 {active} / 共 {total}");
         let _ = tray.set_tooltip(Some(tip));
