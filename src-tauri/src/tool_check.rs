@@ -46,22 +46,19 @@ fn check_now() -> Vec<ToolStatus> {
 
 #[cfg(not(target_os = "windows"))]
 fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
-    // GUI apps don't inherit full shell PATH; use login shell
+    // GUI apps don't inherit full shell PATH; use login shell.
+    // Redirect stderr to stdout — many CLI tools write version to stderr.
     let arg_str = std::iter::once(cmd).chain(args.iter().copied()).collect::<Vec<_>>().join(" ");
-    let shell_cmd = format!("{} 2>/dev/null", arg_str);
     Command::new("/bin/zsh")
-        .args(["-l", "-c", &shell_cmd])
+        .args(["-l", "-c", &format!("{arg_str} 2>&1")])
         .output()
         .ok()
         .and_then(|o| {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if s.is_empty() {
-                String::from_utf8_lossy(&o.stderr).trim().to_string().into()
-            } else {
-                s.into()
-            }
+            let raw = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if raw.is_empty() { return None; }
+            // Take first non-empty line as version
+            raw.lines().find(|l| !l.trim().is_empty()).map(|s| s.to_string())
         })
-        .map(|s| s.lines().next().unwrap_or("??").to_string())
 }
 
 #[cfg(target_os = "windows")]
@@ -71,14 +68,13 @@ fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
         .output()
         .ok()
         .and_then(|o| {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            let mut s = String::from_utf8_lossy(&o.stdout).trim().to_string();
             if s.is_empty() {
-                String::from_utf8_lossy(&o.stderr).trim().to_string().into()
-            } else {
-                s.into()
+                s = String::from_utf8_lossy(&o.stderr).trim().to_string();
             }
+            if s.is_empty() { return None; }
+            s.lines().find(|l| !l.trim().is_empty()).map(|l| l.to_string())
         })
-        .map(|s| s.lines().next().unwrap_or("??").to_string())
 }
 
 fn check_node_npm() -> ToolStatus {
@@ -90,7 +86,8 @@ fn check_node_npm() -> ToolStatus {
         installed: node.is_some() && npm.is_some(),
         version: node.map(|n| {
             let nv = npm.map(|p| format!(", npm {p}")).unwrap_or_default();
-            format!("v{n}{nv}")
+            // node --version already includes "v" prefix
+            format!("{n}{nv}")
         }),
         install_cmd: "请从 https://nodejs.org 下载安装".into(),
         link: "https://nodejs.org".into(),
