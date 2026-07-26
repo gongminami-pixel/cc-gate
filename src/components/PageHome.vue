@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { AgentId, AgentMeta, AppConfig, ModelDef } from "../types/models";
-import { getAgentList, applyAgentConfig } from "../ipc/api";
+import { getAgentList, applyAgentConfig, checkModelUpdates } from "../ipc/api";
 import { useToast } from "../composables/useToast";
 import { useAppConfig } from "../composables/useAppConfig";
+import { listen } from "@tauri-apps/api/event";
 
 const toast = useToast();
 const { config, refresh: refreshConfig } = useAppConfig();
@@ -11,6 +12,9 @@ const { config, refresh: refreshConfig } = useAppConfig();
 const agents = ref<AgentMeta[]>([]);
 const selectedAgentId = ref<AgentId | null>(null);
 const applying = ref(false);
+const checking = ref(false);
+const newModelSlugs = ref<Set<string>>(new Set());
+const catalogVersion = ref(0);
 const workingModels = ref<Record<AgentId, string[]>>({} as Record<AgentId, string[]>);
 const modelRouting = ref<Record<string, string>>({});
 
@@ -83,12 +87,39 @@ async function onApply() {
 
 function fmtTokens(n: number): string { return n >= 1_000_000 ? `${(n/1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n/1_000).toFixed(0)}K` : String(n); }
 
+async function onCheckUpdates() {
+  if (!config.value) return;
+  checking.value = true;
+  try {
+    const result = await checkModelUpdates();
+    newModelSlugs.value = new Set(result.new_slugs);
+    catalogVersion.value = result.version;
+    await refreshConfig();
+    if (result.new_models > 0) {
+      toast.ok(`发现 ${result.new_models} 个新模型`);
+    } else {
+      toast.ok("模型列表已是最新");
+    }
+  } catch (e: any) {
+    toast.err(e?.message ?? String(e));
+  } finally {
+    checking.value = false;
+  }
+}
+
+let unlisten: (() => void) | null = null;
 onMounted(async () => {
   agents.value = await getAgentList();
   initWorking();
   if (agents.value.length > 0) selectedAgentId.value = agents.value[0].id;
+
+  // Listen for background catalog refreshes
+  unlisten = await listen("config-changed", () => {
+    refreshConfig();
+  });
 });
-watch(config, () => { if (config.value) initWorking(); });
+onUnmounted(() => { unlisten?.(); });
+watch(config, () => { if (config.value) { initWorking(); } });
 </script>
 
 <template>
@@ -124,13 +155,20 @@ watch(config, () => { if (config.value) initWorking(); });
           <div class="model-header">
             {{ selectedAgent.name }} 的模型
             <span class="dim">({{ workingModels[selectedAgent.id]?.length ?? 0 }}/{{ allModels.length }})</span>
+            <button class="update-btn" :disabled="checking" @click="onCheckUpdates">
+              <span v-if="checking" class="update-spin">⟳</span>
+              <span v-else>检查模型更新</span>
+            </button>
           </div>
 
           <div v-for="m in allModels" :key="m.slug" class="model-check-row">
             <label class="check-label">
               <input type="checkbox" :checked="isModelEnabled(m.slug)" @change="toggleModel(m.slug)" />
               <span class="check-text">
-                <span class="model-slug">{{ m.slug }}</span>
+                <span class="model-slug">
+                  {{ m.slug }}
+                  <span v-if="newModelSlugs.has(m.slug)" class="new-badge">新</span>
+                </span>
                 <span class="model-meta">{{ m.display_name }} · {{ fmtTokens(m.context_window) }} ctx · {{ fmtTokens(m.max_output_tokens) }} out</span>
               </span>
             </label>
@@ -202,4 +240,23 @@ watch(config, () => { if (config.value) initWorking(); });
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Model update button ──────────────────── */
+.update-btn {
+  margin-left: auto; padding: 4px 12px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md); font-size: 12px; font-weight: 500;
+  background: var(--surface-soft); color: var(--fg-dim); cursor: pointer;
+  transition: all 0.15s; outline: none; white-space: nowrap;
+}
+.update-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.update-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.update-spin { display: inline-block; animation: spin 0.8s linear infinite; }
+
+/* ── New model badge ───────────────────────── */
+.new-badge {
+  display: inline-block; font-size: 10px; font-weight: 700; line-height: 1;
+  padding: 1px 5px; border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent); vertical-align: middle; margin-left: 4px;
+}
 </style>

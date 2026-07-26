@@ -23,3 +23,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Claude Code session state (private)
+.claude/

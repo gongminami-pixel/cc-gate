@@ -19,7 +19,7 @@ pub enum AppError {
     #[error("TOML deserialize: {0}")]
     TomlDe(#[from] toml::de::Error),
 
-    #[error("Config: {0}")]
+    #[error("{0}")]
     Config(String),
 
     #[error("Proxy: {0}")]
@@ -31,8 +31,15 @@ pub enum AppError {
     #[error("Launchctl: {0}")]
     Launchctl(String),
 
+    #[error("Catalog: {0}")]
+    Catalog(String),
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+impl From<String> for AppError {
+    fn from(s: String) -> Self { AppError::Catalog(s) }
 }
 
 impl AppError {

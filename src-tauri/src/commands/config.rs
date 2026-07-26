@@ -1,11 +1,12 @@
 use tauri::State;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use std::sync::Arc;
 
 use crate::config_store;
 use crate::config_writer;
 use crate::error::{AppError, Result};
 use crate::launchd;
+use crate::model_catalog::{self, CheckUpdateResult};
 use crate::proxy_manager::ProxyManager;
 use crate::types::{AppConfig, AgentMeta, RelayConfig, ProxyStatus, agent_list, agent_id_key};
 
@@ -111,4 +112,27 @@ pub fn delete_relay(mut cfg: AppConfig, name: String) -> Result<AppConfig> {
 #[tauri::command] pub fn quit_app(app: tauri::AppHandle) { app.exit(0); }
 #[tauri::command] pub fn hide_main_window(app: tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") { let _ = w.hide(); }
+}
+
+/// Fetch latest model catalog from GitHub, merge into user config.
+#[tauri::command]
+pub async fn check_model_updates(app: tauri::AppHandle) -> Result<CheckUpdateResult> {
+    let remote = model_catalog::fetch_remote_catalog().await?;
+    model_catalog::save_catalog_cache(&remote);
+
+    let mut cfg = config_store::load()?;
+    let (new_count, new_slugs) =
+        model_catalog::merge_remote_models(&mut cfg.models, &remote.models);
+    cfg.model_catalog_version = remote.version;
+    config_store::save(&cfg)?;
+
+    // Notify frontend to refresh
+    let _ = app.emit("config-changed", ());
+
+    Ok(CheckUpdateResult {
+        new_models: new_count,
+        new_slugs,
+        version: remote.version,
+        updated_at: remote.updated_at,
+    })
 }

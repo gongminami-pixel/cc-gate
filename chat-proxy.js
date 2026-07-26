@@ -286,10 +286,10 @@ const server = http.createServer(async (req, res) => {
     } else {
       try {
         const result = await httpRequest(upstreamUrl, authHeaders, upstreamBody);
-        // Record usage on success
-        if (result.status === 200 && result.body?.usage) {
-          recordUsage(modelId, result.body.usage, 'chat-proxy');
-        }
+        // Record usage on success (disabled — 模型参数未校准, 暂不统计)
+        // if (result.status === 200 && result.body?.usage) {
+        //   recordUsage(modelId, result.body.usage, 'chat-proxy');
+        // }
         // Pass through as-is — no translation needed
         res.writeHead(result.status, { 'Content-Type': 'application/json' });
         res.end(typeof result.body === 'string' ? result.body : JSON.stringify(result.body));

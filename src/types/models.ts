@@ -20,6 +20,7 @@ export interface AppConfig {
   /** env_var_name → api_key_value */
   api_keys: Record<string, string>;
   proxy_ports: ProxyPorts;
+  model_catalog_version: number;
   autostart_mimo2codex: boolean; autostart_claude_proxy: boolean; autostart_chat_proxy: boolean;
   autostart_app: boolean;
 }
@@ -45,3 +46,5 @@ export interface PerModelSlot { model: string; display_name: string; tokens: num
 export interface PerModelUsage { label: string; models: PerModelSlot[]; }
 
 export interface ToolStatus { name: string; command: string; installed: boolean; version: string | null; install_cmd: string; link: string; category: string; }
+
+export interface CheckUpdateResult { new_models: number; new_slugs: string[]; version: number; updated_at: string; }

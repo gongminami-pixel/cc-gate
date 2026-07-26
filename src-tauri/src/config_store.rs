@@ -4,6 +4,7 @@ use std::fs;
 use crate::error::Result;
 use crate::paths;
 use crate::types::{AppConfig, agent_list, builtin_models, agent_id_key, all_api_key_names};
+use crate::model_catalog;
 
 pub fn load() -> Result<AppConfig> {
     let p = paths::app_config_path();
@@ -13,11 +14,33 @@ pub fn load() -> Result<AppConfig> {
     } else {
         AppConfig::default()
     };
-    merge_builtin_models(&mut cfg);
+    // Prefer cached remote catalog, fall back to builtin models
+    merge_cached_or_builtin(&mut cfg);
     ensure_agent_models(&mut cfg);
     ensure_model_routing(&mut cfg);
     auto_fill_keys_from_env(&mut cfg);
     Ok(cfg)
+}
+
+/// Try catalog cache first; if that has no new models, merge from builtin.
+fn merge_cached_or_builtin(cfg: &mut AppConfig) {
+    let mut merged = false;
+    if let Some(catalog) = model_catalog::read_catalog_cache() {
+        tracing::info!("catalog cache v{} loaded ({} models)", catalog.version, catalog.models.len());
+        let (new_count, _) = model_catalog::merge_remote_models(&mut cfg.models, &catalog.models);
+        if new_count > 0 || catalog.version > cfg.model_catalog_version {
+            cfg.model_catalog_version = catalog.version;
+            merged = true;
+        }
+    }
+    if !merged {
+        // Fallback: builtin models (no cache available or cache had nothing new)
+        for builtin in builtin_models() {
+            if !cfg.models.iter().any(|m| m.slug == builtin.slug) {
+                cfg.models.push(builtin);
+            }
+        }
+    }
 }
 
 /// Read existing values from .env and auto-fill api_keys for known env var names.
@@ -50,14 +73,6 @@ pub fn save(cfg: &AppConfig) -> Result<()> {
     if let Some(parent) = p.parent() { fs::create_dir_all(parent)?; }
     fs::write(&p, serde_json::to_string_pretty(cfg)?)?;
     Ok(())
-}
-
-fn merge_builtin_models(cfg: &mut AppConfig) {
-    for builtin in builtin_models() {
-        if !cfg.models.iter().any(|m| m.slug == builtin.slug) {
-            cfg.models.push(builtin);
-        }
-    }
 }
 
 fn ensure_agent_models(cfg: &mut AppConfig) {

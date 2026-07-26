@@ -361,7 +361,7 @@ const server = http.createServer(async (req, res) => {
         }, reqBody);
 
         if (result.status === 200) {
-          recordUsage(modelId, result.body?.usage || {}, 'claude-proxy');
+          // recordUsage(modelId, result.body?.usage || {}, 'claude-proxy');
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(result.body));
         } else {
@@ -387,7 +387,7 @@ const server = http.createServer(async (req, res) => {
         }, openaiReq);
         if (result.status === 200) {
           const anthropicResp = openAIToAnthropic(result.body, modelId);
-          recordUsage(modelId, anthropicResp.usage || {}, 'claude-proxy');
+          // recordUsage(modelId, anthropicResp.usage || {}, 'claude-proxy');
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(anthropicResp));
         } else {

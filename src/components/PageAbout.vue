@@ -65,7 +65,7 @@
           <div class="feature-title">自动启动</div>
           <div class="feature-detail">
             3 个代理进程（mimo2codex / claude-proxy / chat-proxy）
-            随 App 启动自动拉起，统���管理
+            随 App 启动自动拉起，统一管理
           </div>
         </div>
 

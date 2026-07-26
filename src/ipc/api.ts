@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AgentMeta, RelayConfig, AppConfig, ApplyResult, ProxyStatus } from "../types/models";
+import type { AgentMeta, RelayConfig, AppConfig, ApplyResult, ProxyStatus, CheckUpdateResult } from "../types/models";
 import type { UsageSummary, DailyUsage, LogEntry, PerModelUsage, ToolStatus } from "../types/models";
 export type { UsageSummary, DailyUsage, LogEntry, PerModelUsage, ToolStatus };
 
@@ -38,3 +38,6 @@ export async function importUsageData(): Promise<number> { return invoke<number>
 
 // Tool check
 export async function checkTools(force?: boolean): Promise<ToolStatus[]> { return invoke<ToolStatus[]>("check_tools", { force: force ?? false }); }
+
+// Model catalog
+export async function checkModelUpdates(): Promise<CheckUpdateResult> { return invoke<CheckUpdateResult>("check_model_updates"); }

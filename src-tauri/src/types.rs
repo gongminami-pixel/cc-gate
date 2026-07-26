@@ -72,6 +72,7 @@ pub struct AppConfig {
     #[serde(default)]
     pub api_keys: HashMap<String, String>,
     pub proxy_ports: ProxyPorts,
+    #[serde(default)] pub model_catalog_version: u32,
     #[serde(default = "default_true")] pub autostart_mimo2codex: bool,
     #[serde(default = "default_true")] pub autostart_claude_proxy: bool,
     #[serde(default = "default_true")] pub autostart_chat_proxy: bool,
@@ -95,6 +96,7 @@ impl Default for AppConfig {
         Self {
             version: 3, models: builtin_models(), agent_models, relays: vec![],
             model_routing, api_keys: HashMap::new(), proxy_ports: ProxyPorts::default(),
+            model_catalog_version: 0,
             autostart_mimo2codex: true, autostart_claude_proxy: true, autostart_chat_proxy: true,
             autostart_app: false,
         }

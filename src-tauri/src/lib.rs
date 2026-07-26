@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex, OnceLock};
-use tauri::Manager as _;
+use tauri::{Emitter, Manager as _};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
@@ -18,6 +18,7 @@ pub mod tray;
 pub mod commands;
 pub mod usage_db;
 pub mod tool_check;
+pub mod model_catalog;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -65,6 +66,32 @@ pub fn run() {
                 let _ = m.start_enabled().await;
                 tray::force_refresh(&app_handle).await;
             });
+
+            // Background: try to refresh model catalog from GitHub
+            let app_handle2 = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match crate::model_catalog::fetch_remote_catalog().await {
+                    Ok(remote) => {
+                        crate::model_catalog::save_catalog_cache(&remote);
+                        // If new models found, merge into config silently
+                        if let Ok(mut cfg) = crate::config_store::load() {
+                            if cfg.model_catalog_version < remote.version {
+                                let (count, _) = crate::model_catalog::merge_remote_models(
+                                    &mut cfg.models, &remote.models,
+                                );
+                                cfg.model_catalog_version = remote.version;
+                                if let Err(e) = crate::config_store::save(&cfg) {
+                                    tracing::warn!("catalog background save failed: {e}");
+                                } else if count > 0 {
+                                    let _ = app_handle2.emit("config-changed", ());
+                                    tracing::info!("catalog background refresh: {count} new models");
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => tracing::info!("catalog background fetch skipped: {e}"),
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -91,6 +118,7 @@ pub fn run() {
             commands::usage::get_recent_logs,
             commands::usage::get_per_model_usage,
             commands::usage::import_usage_data,
+            commands::config::check_model_updates,
             check_tools,
         ])
         .build(tauri::generate_context!())
