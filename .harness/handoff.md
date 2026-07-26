@@ -47,10 +47,9 @@ _Last updated: 2026-07-26T12:15:00+08:00_
 
 ## Next actions (ordered)
 
-1. 用户跑 `bash scripts/release.sh` 上传双端安装包到 GitHub Releases
-2. 模型参数进一步校准（qwen3.8 上下文、mimo 参数）
-3. OpenCode 配置策略调研
-4. 用户测试各 Agent 模型切换
+1. 模型参数进一步校准（qwen3.8 上下文、mimo 参数）
+2. OpenCode 配置策略调研
+3. 用户测试各 Agent 模型切换
 
 ## Beware
 

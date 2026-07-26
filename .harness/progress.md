@@ -104,3 +104,18 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + 重写 handoff + 追加 progress/decisions + git 提交
 - **outcome**: 状态完整反映到最新
 - **next**: 用户跑 release.sh + 模型参数进一步校准
+
+## 2026-07-26T12:30:00+08:00 — work: 双端安装包成功上传到 GitHub Releases
+- **touched**: scripts/release.sh
+- **action**: 
+  - release.sh 迭代 4 次（shell 转义+Python SSL 证书+curl 混 bash 文件损坏→最终纯 curl 方案）
+  - Mac DMG (3.9MB) + Windows exe (7.1MB) 上传到 v0.1.0 Release
+  - SHA256 校验码写入 Release 正文
+- **outcome**: 下载页 https://github.com/gongminami-pixel/cc-gate/releases/tag/v0.1.0 可正常下载
+- **next**: ��型参数进一步校准（qwen3.8/mimo 上下文等）
+
+## 2026-07-26T12:35:00+08:00 — handoff_ready: 同步加提交（Release 上传完成）
+- **touched**: .harness/progress.md
+- **action**: 追加 progress 条目（Release 上传成功）
+- **outcome**: L2 状态更新
+- **next**: 用户继续测试
