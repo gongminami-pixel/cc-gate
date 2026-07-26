@@ -6,7 +6,7 @@ use std::time::Duration;
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    tray::TrayIconBuilder,
     AppHandle, Manager,
 };
 
@@ -43,79 +43,99 @@ pub fn setup(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
-        .icon_as_template(false)
         .menu(&menu)
-        .show_menu_on_left_click(false)
+        .icon_as_template(false)
+        .show_menu_on_left_click(true)
         .tooltip("CC-Gate")
-        .on_tray_icon_event(move |tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                show_main_window(tray.app_handle());
-            }
-        })
         .on_menu_event(move |app, event| handle_menu_event(app, event.id.as_ref()))
         .build(app)?;
 
-    // Background refresh every 5s
+    // Background refresh: icon+tooltip every 5s, menu only on change
     let app_for_refresh = app.clone();
     tauri::async_runtime::spawn(async move {
+        let mut last_summary: String = String::new();
         loop {
             tokio::time::sleep(Duration::from_secs(5)).await;
-            refresh(&app_for_refresh).await;
+            refresh(&app_for_refresh, &mut last_summary).await;
         }
     });
 
     Ok(())
 }
 
-pub async fn refresh(app: &AppHandle) {
+pub async fn refresh(app: &AppHandle, last_summary: &mut String) {
     let manager = match app.try_state::<Arc<ProxyManager>>() {
         Some(m) => m.inner().clone(),
         None => return,
     };
     let statuses = manager.status_all().await;
+    // Update icon + tooltip only; skip menu rebuild unless summary changed
+    update_icon_and_tooltip(app, &statuses).await;
+    rebuild_menu_if_changed(app, &statuses, last_summary).await;
+}
+
+/// Force-full refresh (used after toggle/restart from tray menu or initial setup)
+pub async fn force_refresh(app: &AppHandle) {
+    let manager = match app.try_state::<Arc<ProxyManager>>() {
+        Some(m) => m.inner().clone(),
+        None => return,
+    };
+    let statuses = manager.status_all().await;
+    update_icon_and_tooltip(app, &statuses).await;
+    let summary_text = build_summary(&statuses);
+    rebuild_menu_always(app, &statuses, &summary_text).await;
+}
+
+async fn update_icon_and_tooltip(app: &AppHandle, statuses: &[crate::types::ProxyStatus]) {
     let active = statuses.iter().filter(|s| s.running).count();
     let total = statuses.len();
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_tooltip(Some(format!("CC-Gate · 活跃 {active} / 共 {total}")));
+    }
+}
 
-    // Build menu
+async fn rebuild_menu_if_changed(app: &AppHandle, statuses: &[crate::types::ProxyStatus], last_summary: &mut String) {
+    let summary_text = build_summary(statuses);
+    if summary_text == *last_summary { return; }
+    *last_summary = summary_text.clone();
+    rebuild_menu_always(app, statuses, &summary_text).await;
+}
+
+fn build_summary(statuses: &[crate::types::ProxyStatus]) -> String {
+    let active = statuses.iter().filter(|s| s.running).count();
+    let total = statuses.len();
+    format!("CC-Gate · 代理活跃 {active} / 共 {total}")
+}
+
+async fn rebuild_menu_always(app: &AppHandle, statuses: &[crate::types::ProxyStatus], summary_text: &str) {
+    let active = statuses.iter().filter(|s| s.running).count();
+    let total = statuses.len();
     let app_clone = app.clone();
-    let statuses_clone = statuses.clone();
+    let statuses_clone = statuses.to_vec();
+    let summary = summary_text.to_string();
     let (tx, rx) = tokio::sync::oneshot::channel();
     if app.run_on_main_thread(move || {
-        let _ = tx.send(build_menu(&app_clone, &statuses_clone, active, total).ok());
+        let _ = tx.send(build_menu(&app_clone, &statuses_clone, active, total, &summary).ok());
     }).is_err() {
         return;
     }
     let menu = match rx.await.ok().flatten() {
         Some(m) => m,
-        None => {
-            tracing::warn!("tray refresh: menu rebuild failed");
-            return;
-        }
+        None => { tracing::warn!("tray refresh: menu rebuild failed"); return; }
     };
-
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let _ = tray.set_menu(Some(menu));
-        if let Some(icon) = load_tray_icon() {
-            let _ = tray.set_icon(Some(icon));
-            let _ = tray.set_icon_as_template(false);
-        }
-        let tip = format!("CC-Gate · 活跃 {active} / 共 {total}");
-        let _ = tray.set_tooltip(Some(tip));
     }
 }
 
 fn build_menu(
     app: &AppHandle,
     statuses: &[crate::types::ProxyStatus],
-    active: usize,
-    total: usize,
+    _active: usize,
+    _total: usize,
+    summary_text: &str,
 ) -> tauri::Result<Menu<tauri::Wry>> {
-    let summary = format!("CC-Gate · 代理活跃 {active} / 共 {total}");
+    let summary = summary_text.to_string();
 
     let mut items: Vec<Box<dyn tauri::menu::IsMenuItem<tauri::Wry>>> = vec![
         Box::new(MenuItem::with_id(app, "summary", &summary, false, None::<&str>)?),
@@ -193,7 +213,7 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                             let _ = m.start(&proxy_name, port, &script).await;
                         }
                     }
-                    refresh(&app).await;
+                    force_refresh(&app).await;
                 }
             });
         }
@@ -203,7 +223,7 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                     let m = mgr.inner().clone();
                     let (port, script) = proxy_defaults(&proxy_name);
                     let _ = m.restart(&proxy_name, port, &script).await;
-                    refresh(&app).await;
+                    force_refresh(&app).await;
                 }
             });
         }

@@ -63,7 +63,7 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 // Auto-start proxies that were previously enabled
                 let _ = m.start_enabled().await;
-                tray::refresh(&app_handle).await;
+                tray::force_refresh(&app_handle).await;
             });
             Ok(())
         })
