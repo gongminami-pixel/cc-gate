@@ -31,3 +31,36 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 重写 handoff.md，追加 progress 条目，写入 decisions 条目
 - **outcome**: handoff 反映最新状态
 - **next**: 首次 git 提交 + 双端构建
+
+## 2026-07-26T00:30:00+08:00 — work: 后台构建（隐藏用量/模型参数菜单 + 乱码修复）
+- **touched**: src/components/Sidebar.vue src/components/PageAbout.vue chat-proxy.js claude-proxy.js
+- **action**: 
+  - 侧边栏注释掉"用量统计"和"模型参数"菜单项（代码保留）
+  - chat-proxy.js 和 claude-proxy.js 注释掉 recordUsage() 调用（代码保留）
+  - PageAbout.vue "统���管理" 字节级修复为"统一管理"
+- **outcome**: Mac 构建成功，已安装到 /Applications
+- **next**: 回答用户关于模型版本同步的问题
+
+## 2026-07-26T01:30:00+08:00 — work: 远程模型目录自动更新 feature
+- **touched**: models-catalog.json src-tauri/src/model_catalog.rs src-tauri/Cargo.toml src-tauri/src/types.rs src-tauri/src/config_store.rs src-tauri/src/commands/config.rs src-tauri/src/error.rs src-tauri/src/lib.rs src/components/PageHome.vue src/types/models.ts src/ipc/api.ts .gitignore
+- **action**:
+  - 新建 models-catalog.json（9 个模型完整定义，放仓库根目录）
+  - 新建 model_catalog.rs：fetch_remote_catalog + read_catalog_cache + save_catalog_cache + merge_remote_models
+  - 启动时后台静默拉取远程 catalog，有新模型自动合并入本地配置
+  - 首页模型列表 header 加"检查模型更新"按钮，新模型显示"新"badge
+  - merge 逻辑：远程参数覆盖本地但保留 enabled 状态；远程新模型默认不勾选
+  - 离线兜底：缓存 → builtin_models()
+  - AppConfig 新增 model_catalog_version 字段
+  - 新增 check_model_updates Tauri command
+  - 前端监听 config-changed 事件自动刷新
+  - reqwest (rustls-tls) 依赖
+  - From<String> for AppError
+  - .gitignore 加 .claude/ 排除私有会话状态
+- **outcome**: Mac 构建成功 + 安装到 /Applications + git push 到 GitHub
+- **next**: 用户测试"检查模型更新"（远程 URL 已生效）
+
+## 2026-07-26T02:15:00+08:00 — handoff_ready: 同步记忆
+- **touched**: .harness/waypoints/2026-07-26T02-15-00+08:00.md .harness/handoff.md .harness/progress.md .harness/decisions.md
+- **action**: 落 waypoint + 重写 handoff + 追加 decisions
+- **outcome**: 状态反映到远程模型目录 feature 完成后
+- **next**: git 提交 .harness/ + 用户测试

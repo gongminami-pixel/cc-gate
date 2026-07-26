@@ -44,10 +44,27 @@ _Append-only. Each entry captures the "why" behind a choice._
 **Supersedes**: -
 **Impact**: /model 命令能看到完整模型列表，切换不断流
 
-## 2026-07-25T23:00:00+08:00 — 新增 Hermes + OpenClaw 配置写入
-**Why**: 用户确认这两个工具可以写全局配置
-**What**: write_hermes_config (serde_yaml 合并) + write_openclaw_config (JSON5 兼容)
-**Alternatives**: 不做 -- 用户需手动配
-**Evidence**: src-tauri/src/config_writer.rs:437-575
+## 2026-07-26T01:30:00+08:00 — 远程模型目录自动更新（解决厂商出新模型需重编 CC-Gate 的问题）
+**Why**: 用户问"厂商出新模型咱们的程序还起作用么"——builtin_models() 硬编码 9 个模型，新模型必须改代码 + 重编 + 出包。用户要求不依赖 CC-Gate 发版就能跟上厂商更新
+**What**: 
+  - models-catalog.json 放仓库根目录 → GitHub raw URL 可访问
+  - 新增 model_catalog.rs：fetch_remote_catalog (reqwest HTTPS) + 本地缓存 (~/.mimo2codex/models-cache.json) + merge_remote_models
+  - merge 策略：远程参数覆盖本地（context_window/pricing 等），但保留用户 enabled 状态；远程新模型默认 enabled=false
+  - 启动时后台静默拉取（不阻塞 UI）
+  - 首页"检查模型更新"按钮供用户主动刷新
+  - 离线兜底链：缓存 → builtin_models()
+**Alternatives**: 
+  - 不从远程拉，纯依赖定���发版更新 builtin_models() ——太重
+  - 从代理 /v1/models 动态发现——代理端 /v1/models 返回不完整，且 Rust 侧没有消费代码
+  - JSON 放独立仓库——当前放主仓库根目录，简单够用
+**Evidence**: models-catalog.json, src-tauri/src/model_catalog.rs, src-tauri/src/config_store.rs:13-31
+**Supersedes**: builtin_models() 作为唯一模型源（现降级为兜底）
+**Impact**: 厂商出新模型只需改 models-catalog.json + git push；所有 CC-Gate 实例自动获取。builtin_models() 保留不动作终极兜底
+
+## 2026-07-26T01:30:00+08:00 — 侧边栏隐藏用量统计和模型参数
+**Why**: 用户说模型参数不准确（context_window 等没校准），用量统计逻辑也未启用
+**What**: 注释掉 Sidebar.vue 中 usage 和 models 两个菜单项；两个 proxy .js 中 recordUsage() 调用注释掉。代码保留不删，以便将来校准后恢复
+**Alternatives**: 删除代码——将来恢复需从 git history 找回
+**Evidence**: src/components/Sidebar.vue:9-10, claude-proxy.js:364,390, chat-proxy.js:291
 **Supersedes**: -
-**Impact**: Hermes custom_providers 和 OpenClaw models.providers 自动管理
+**Impact**: 用户看不到这两个菜单项；用量 jsonl 不再写入（节省磁盘 I/O+隐私）
