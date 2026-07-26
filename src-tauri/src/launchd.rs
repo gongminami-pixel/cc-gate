@@ -1,13 +1,23 @@
 //! Manage the CC-Gate LaunchAgent that auto-starts the app at login.
+//! All functions are macOS-only; non-macOS targets get stubs.
 
+#[cfg(target_os = "macos")]
 use std::fs;
+#[cfg(target_os = "macos")]
 use std::process::Command;
 
+#[cfg(target_os = "macos")]
 use crate::error::{AppError, Result};
+#[cfg(target_os = "macos")]
 use crate::paths;
 
+#[cfg(not(target_os = "macos"))]
+use crate::error::Result;
+
+#[cfg(target_os = "macos")]
 const LABEL: &str = "com.CC-Gate.app";
 
+#[cfg(target_os = "macos")]
 fn render_plist(executable: &str) -> String {
     format!(r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
@@ -30,12 +40,15 @@ fn render_plist(executable: &str) -> String {
 "#)
 }
 
+#[cfg(target_os = "macos")]
 fn current_uid() -> u32 {
     unsafe { libc::getuid() as u32 }
 }
 
+#[cfg(target_os = "macos")]
 fn domain() -> String { format!("gui/{}", current_uid()) }
 
+#[cfg(target_os = "macos")]
 pub fn enable_autostart() -> Result<()> {
     let exe = std::env::current_exe()
         .map_err(|e| AppError::other(format!("current_exe: {e}")))?;
@@ -60,6 +73,7 @@ pub fn enable_autostart() -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
 pub fn disable_autostart() -> Result<()> {
     let _ = Command::new("launchctl")
         .args(["bootout", &format!("{}/{LABEL}", domain())])
@@ -69,6 +83,7 @@ pub fn disable_autostart() -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
 pub fn autostart_status() -> bool {
     let plist = match paths::app_launchagent_plist() { Ok(p) => p, Err(_) => return false };
     if !plist.exists() { return false; }
@@ -77,3 +92,20 @@ pub fn autostart_status() -> bool {
         .output();
     matches!(out, Ok(o) if o.status.success())
 }
+
+// ── Non-macOS stubs ────────────────────────────────────
+
+#[cfg(not(target_os = "macos"))]
+pub fn enable_autostart() -> Result<()> {
+    tracing::info!("autostart: not supported on this platform");
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn disable_autostart() -> Result<()> {
+    tracing::info!("autostart: not supported on this platform");
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn autostart_status() -> bool { false }

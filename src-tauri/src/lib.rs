@@ -96,21 +96,26 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building CC-Gate");
 
-    app.run(move |handle, event| match event {
-        tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+    app.run(move |_handle, event| {
+        #[allow(unused_variables)]
+        let handle = &_handle;
+        // Exit handler (all platforms)
+        if matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
             let m = proxy_mgr_for_exit.clone();
             tauri::async_runtime::block_on(async move {
                 m.shutdown_all().await;
             });
+            return;
         }
-        tauri::RunEvent::Reopen { has_visible_windows: false, .. } => {
+        // Dock click re-open (macOS only)
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { has_visible_windows: false, .. } = event {
             if let Some(w) = handle.get_webview_window("main") {
                 let _ = w.show();
                 let _ = w.unminimize();
                 let _ = w.set_focus();
             }
         }
-        _ => {}
     });
 }
 
