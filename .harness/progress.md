@@ -64,3 +64,43 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + 重写 handoff + 追加 decisions
 - **outcome**: 状态反映到远程模型目录 feature 完成后
 - **next**: git 提交 .harness/ + 用户测试
+
+## 2026-07-26T03:00:00+08:00 — work: README 开源说明文档 + 远程模型目录上线
+- **touched**: README.md
+- **action**:
+  - 写 README.md 开源首页说明文档
+  - ���部突出与 CC Switch 最大区别（CLI alias 多窗口并行 vs 全局单模型切换）
+  - 分 CLI 和桌面端两个维度对比
+  - push 到 GitHub 后模型目录 404 修复
+- **outcome**: GitHub 首页可读，"检查模型更新"可正常拉取
+- **next**: 工具检测体验优化
+
+## 2026-07-26T11:00:00+08:00 — work: 工具检测渐进式加载（3 次迭代）
+- **touched**: src-tauri/src/tool_check.rs src-tauri/src/lib.rs src/components/PageTools.vue src/ipc/api.ts
+- **action**:
+  - 第 1 版：check_progressive() + thread::spawn emit 事件 —— 失败（Tauri 在 command 期内缓冲事件）
+  - 第 2 版：去掉 thread::spawn，同步 emit —— 仍然失败（同一问题）
+  - 第 3 版：改为前端逐个调用 checkOneTool()（6 次独立 IPC），每调用一次 Rust 检测一个工具、返回一个结果、前端立即更新 UI —— 成功
+  - 新增 saveToolCache() 命令回写缓存
+  - 新增 check_one() 按名匹配检测
+- **outcome**: 工具检测页面进即渲染 6 条"检测中…"，逐条亮起（已安装/未安装），体验流畅
+- **next**: 模型参数校准 + 双端构建
+
+## 2026-07-26T12:00:00+08:00 — work: 模型参数更新 + 双端构建 + Release 脚本
+- **touched**: models-catalog.json src-tauri/src/types.rs src-tauri/src/config_writer.rs README.md scripts/release.sh
+- **action**:
+  - Claude Opus 4.5 → Opus 5（slug: claude-opus-5，上下文 200K → 1M）
+  - GPT-5.1 Codex → GPT-5.6（slug: gpt-5.6）
+  - GLM-5.2 上下文 128K → 1M
+  - 同步更新 models-catalog.json + builtin_models() + short() alias 映射 + README 模型表
+  - Mac 构建 (3.9MB DMG) + Windows 构建 (7.1MB exe)
+  - 创建 scripts/release.sh（curl 创建 GitHub Release + 上传双端 MA）
+  - v0.1.0 tag 已推送
+- **outcome**: 双端包就绪，发布脚本就绪，用户跑 release.sh 即可上传
+- **next**: 用户跑 release.sh → 下载页就绪
+
+## 2026-07-26T12:15:00+08:00 — handoff_ready: 同步加提交
+- **touched**: .harness/waypoints/2026-07-26T12-15-00+08:00.md .harness/handoff.md .harness/progress.md .harness/decisions.md
+- **action**: 落 waypoint + 重写 handoff + 追加 progress/decisions + git 提交
+- **outcome**: 状态完整反映到最新
+- **next**: 用户跑 release.sh + 模型参数进一步校准

@@ -67,4 +67,18 @@ _Append-only. Each entry captures the "why" behind a choice._
 **Alternatives**: 删除代码——将来恢复需从 git history 找回
 **Evidence**: src/components/Sidebar.vue:9-10, claude-proxy.js:364,390, chat-proxy.js:291
 **Supersedes**: -
-**Impact**: 用户看不到这两个菜单项；用量 jsonl 不再写入（节省磁盘 I/O+隐私）
+**Impact**: 用户看不到这两个菜单项；用量 jsonl 不再写入
+
+## 2026-07-26T11:00:00+08:00 — 工具检测改为逐条 IPC 调用实现渐进式加载
+**Why**: emit event 方案在 Tauri 中失效——同一个 command 执行期间 event 被缓冲，command 返回后才批量送达前端（thread::spawn 异步也不行）
+**What**: 废弃 streaming command，改为 6 个独立 IPC——前端 async for loop 调用 checkOneTool()，每次 await 后立即更新 UI，最后 saveToolCache 回写缓存
+**Evidence**: src-tauri/src/tool_check.rs:36-44, src-tauri/src/lib.rs:189-193, src/components/PageTools.vue:48-63
+**Supersedes**: 旧版 check_tools() 一次性返回（保留备用）
+**Impact**: 6 次 IPC 替代 1 次，换取实时流式体验
+
+## 2026-07-26T12:00:00+08:00 — 模型参数更新：Opus 5 + GPT-5.6 + GLM 1M 上下文
+**Why**: 用户指出 Opus 最新 5.0（1M）、GPT 最新 5.6、GLM 支持 1M
+**What**: slug claude-opus-4-5→claude-opus-5, gpt-5.1-codex→gpt-5.6; GLM context 128K→1M; 同步更新 models-catalog.json + builtin_models() + short() + README
+**Evidence**: types.rs:147-148, models-catalog.json:53-58, config_writer.rs:594
+**Supersedes**: 旧模型版本参数
+**Impact**: alias 名不变（short() 仍返回 "opus"/"gpt"），但 slug 和参数已是新版
