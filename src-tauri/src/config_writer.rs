@@ -97,6 +97,7 @@ pub fn write_providers(cfg: &AppConfig) -> Result<()> {
             "name": display_name,
             "baseUrl": base_url,
             "envKey": env_key,
+            "defaultModel": models[0].slug,
             "models": models.iter().map(|m| serde_json::json!({
                 "id": m.slug,
                 "displayName": m.display_name,

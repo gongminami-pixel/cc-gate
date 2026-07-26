@@ -8,7 +8,7 @@ use crate::error::{AppError, Result};
 use crate::launchd;
 use crate::model_catalog::{self, CheckUpdateResult};
 use crate::proxy_manager::ProxyManager;
-use crate::types::{AppConfig, AgentMeta, RelayConfig, ProxyStatus, agent_list, agent_id_key};
+use crate::types::{AppConfig, AgentMeta, RelayConfig, ProxyStatus, agent_list};
 
 #[tauri::command] pub fn get_config() -> Result<AppConfig> { config_store::load() }
 #[tauri::command] pub fn save_config(cfg: AppConfig) -> Result<()> { config_store::save(&cfg) }
@@ -37,20 +37,13 @@ pub async fn apply_agent_config(
     config_writer::write_all_tool_configs(&cfg)?;
 
     let mut restarted: Vec<String> = vec![];
-    let needs_mimo = agent_list().iter().filter(|a| a.proxy == "mimo2codex").any(|a| cfg.agent_models.contains_key(&agent_id_key(&a.id)));
-    let needs_claude = agent_list().iter().filter(|a| a.proxy == "claude-proxy").any(|a| cfg.agent_models.contains_key(&agent_id_key(&a.id)));
-    let needs_chat = agent_list().iter().filter(|a| a.proxy == "chat-proxy").any(|a| cfg.agent_models.contains_key(&agent_id_key(&a.id)));
 
-    if needs_mimo && cfg.autostart_mimo2codex {
-        if let Ok(s) = proxy_mgr.restart("mimo2codex", 8688, "mimo2codex").await { if s.running { restarted.push("mimo2codex".into()); } }
-    }
-    if needs_claude && cfg.autostart_claude_proxy {
-        let script = crate::paths::mimo2codex_dir().join("claude-proxy.js").to_string_lossy().to_string();
-        if let Ok(s) = proxy_mgr.restart("claude-proxy", 8689, &script).await { if s.running { restarted.push("claude-proxy".into()); } }
-    }
-    if needs_chat && cfg.autostart_chat_proxy {
-        let script = crate::paths::mimo2codex_dir().join("chat-proxy.js").to_string_lossy().to_string();
-        if let Ok(s) = proxy_mgr.restart("chat-proxy", 8690, &script).await { if s.running { restarted.push("chat-proxy".into()); } }
+    // All three proxies always run while the app is open — restart unconditionally
+    for name in &["mimo2codex", "claude-proxy", "chat-proxy"] {
+        let (port, script) = proxy_mgr.proxy_script_for(name);
+        if let Ok(s) = proxy_mgr.restart(name, port, &script).await {
+            if s.running { restarted.push(name.to_string()); }
+        }
     }
 
     Ok(ApplyResult { success: true, message: "配置已应用".into(), restarted_proxies: restarted })

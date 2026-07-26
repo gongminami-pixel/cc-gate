@@ -1,33 +1,55 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import type { AppConfig } from "../types/models";
-import { saveConfig, setAppAutostart, getAppAutostartStatus } from "../ipc/api";
+import { onMounted, onUnmounted, ref } from "vue";
+import type { AppConfig, ProxyStatus } from "../types/models";
+import { setAppAutostart, getAppAutostartStatus, getProxyStatus } from "../ipc/api";
 import { useToast } from "../composables/useToast";
-import { useAppConfig } from "../composables/useAppConfig";
 
 const props = defineProps<{ config: AppConfig | null }>();
 const toast = useToast();
-const { refresh } = useAppConfig();
 
 const autostartEnabled = ref(false);
 const autostartBusy = ref(false);
+const proxyStatuses = ref<ProxyStatus[]>([]);
+let statusTimer: ReturnType<typeof setInterval> | null = null;
 
 async function loadAutostart() {
   try { autostartEnabled.value = (await getAppAutostartStatus()).enabled; } catch { autostartEnabled.value = false; }
+}
+async function loadProxyStatuses() {
+  try { proxyStatuses.value = await getProxyStatus(); } catch { /* proxy manager not ready yet */ }
 }
 async function onToggleAutostart() {
   autostartBusy.value = true;
   try { const r = await setAppAutostart(!autostartEnabled.value); autostartEnabled.value = r.enabled; toast.ok(r.enabled ? "已启用登录时自动启动" : "已关闭登录时自动启动"); }
   catch (e: any) { toast.err(e?.message ?? String(e)); } finally { autostartBusy.value = false; }
 }
-async function onToggleProxyAutostart(key: "autostart_mimo2codex" | "autostart_claude_proxy" | "autostart_chat_proxy") {
-  if (!props.config) return;
-  props.config[key] = !props.config[key];
-  try { await saveConfig(props.config); toast.ok("已保存"); await refresh(); }
-  catch (e: any) { toast.err(e?.message ?? String(e)); }
+
+const STATUSBAR_META: { name: string; key: string; port: number; label: string; desc: string }[] = [
+  {
+    name: "mimo2codex", key: "mimo2codex", port: 8688, label: "mimo2codex",
+    desc: "协议转换 — 把 Responses API 转为 Chat Completions，供 Codex CLI、Codex Desktop、Reasonix 使用",
+  },
+  {
+    name: "claude-proxy", key: "claude-proxy", port: 8689, label: "claude-proxy",
+    desc: "协议转换 — 把 Anthropic Messages API 转为 Chat Completions，供 Claude CLI、Claude Desktop 使用",
+  },
+  {
+    name: "chat-proxy", key: "chat-proxy", port: 8690, label: "chat-proxy",
+    desc: "Chat Completions 透传 — 直接转发，供 Hermes、OpenCode、OpenClaw、Aider、Cursor 使用",
+  },
+];
+function statusFor(key: string): ProxyStatus | undefined {
+  return proxyStatuses.value.find(s => s.name === key);
 }
 
-onMounted(loadAutostart);
+onMounted(() => {
+  loadAutostart();
+  loadProxyStatuses();
+  statusTimer = setInterval(loadProxyStatuses, 3000);
+});
+onUnmounted(() => {
+  if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
+});
 </script>
 
 <template>
@@ -42,12 +64,21 @@ onMounted(loadAutostart);
     </div>
 
     <div class="card mt12">
-      <div class="card-head">代理进程</div>
+      <div class="card-head">代理状态</div>
       <div class="card-body">
-        <p class="sec-desc">App 启动时自动拉起以下代理进程。关闭则需手动在「首页」点应用后重启。</p>
-        <div class="toggle-row"><span>mimo2codex (端口 :8688)</span><label class="toggle"><input type="checkbox" :checked="config?.autostart_mimo2codex" @change="onToggleProxyAutostart('autostart_mimo2codex')" /><span class="slider"></span></label></div>
-        <div class="toggle-row"><span>claude-proxy (端口 :8689)</span><label class="toggle"><input type="checkbox" :checked="config?.autostart_claude_proxy" @change="onToggleProxyAutostart('autostart_claude_proxy')" /><span class="slider"></span></label></div>
-        <div class="toggle-row"><span>chat-proxy (端口 :8690)</span><label class="toggle"><input type="checkbox" :checked="config?.autostart_chat_proxy" @change="onToggleProxyAutostart('autostart_chat_proxy')" /><span class="slider"></span></label></div>
+        <p class="sec-desc">当前各代理进程的运行状况。每 3 秒自动刷新。</p>
+        <div v-for="m in STATUSBAR_META" :key="m.key" class="status-block">
+          <div class="status-row">
+            <span class="status-dot" :class="{ on: statusFor(m.key)?.running }"></span>
+            <span class="status-name">{{ m.label }}</span>
+            <span class="status-port">:{{ m.port }}</span>
+            <span class="status-state" :class="{ running: statusFor(m.key)?.running }">
+              {{ statusFor(m.key)?.running ? '运行中' : '未启动' }}
+            </span>
+            <span v-if="statusFor(m.key)?.running && statusFor(m.key)?.pid" class="status-pid">PID {{ statusFor(m.key)?.pid }}</span>
+          </div>
+          <div class="status-desc">{{ m.desc }}</div>
+        </div>
       </div>
     </div>
   </section>
@@ -59,4 +90,21 @@ onMounted(loadAutostart);
 .sec-desc { font-size: 12px; color: var(--fg-dim); margin: 0 0 10px; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .toggle-row:last-child { border-bottom: none; }
+
+/* ── Proxy status rows ────────────────────── */
+.status-block { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.status-block:last-child { border-bottom: none; }
+.status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--fg-dim); flex-shrink: 0; }
+.status-dot.on { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.5); animation: pulse-dot 2s ease-in-out infinite; }
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 4px rgba(34,197,94,0.4); }
+  50%      { box-shadow: 0 0 12px rgba(34,197,94,0.8); }
+}
+.status-name { font-weight: 600; font-family: "SF Mono", "Menlo", monospace; font-size: 13px; min-width: 100px; }
+.status-port { color: var(--fg-dim); font-family: "SF Mono", "Menlo", monospace; font-size: 12px; }
+.status-state { font-size: 12px; color: var(--fg-dim); }
+.status-state.running { color: #22c55e; font-weight: 600; }
+.status-pid { font-size: 11px; color: var(--fg-muted); margin-left: auto; font-family: "SF Mono", "Menlo", monospace; }
+.status-desc { font-size: 12px; color: var(--fg-dim); margin-top: 4px; margin-left: 17px; line-height: 1.5; }
 </style>

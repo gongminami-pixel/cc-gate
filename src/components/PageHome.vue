@@ -75,8 +75,22 @@ function setRouting(slug: string, value: string) {
 
 async function onApply() {
   if (!config.value) return;
-  applying.value = true;
   const cfg: AppConfig = { ...config.value, agent_models: { ...workingModels.value } as Record<AgentId, string[]>, model_routing: { ...modelRouting.value } };
+
+  // Warn before restarting proxy that carries the current chat session
+  const willRestartClaude = cfg.autostart_claude_proxy &&
+    agents.value.some(a => a.proxy === "claude-proxy" && (cfg.agent_models[a.id]?.length ?? 0) > 0);
+  if (willRestartClaude) {
+    if (!window.confirm(
+      "即将重启 claude-proxy（端口 8689）。\n\n" +
+      "如果你当前正通过它连接到 CC Chat，本次操作会断开当前会话。\n\n" +
+      "确定要继续吗？"
+    )) {
+      return;
+    }
+  }
+
+  applying.value = true;
   try {
     const result = await applyAgentConfig(cfg);
     await refreshConfig();
