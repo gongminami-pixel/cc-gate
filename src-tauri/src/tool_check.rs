@@ -44,6 +44,27 @@ fn check_now() -> Vec<ToolStatus> {
     ]
 }
 
+#[cfg(not(target_os = "windows"))]
+fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
+    // GUI apps don't inherit full shell PATH; use login shell
+    let arg_str = std::iter::once(cmd).chain(args.iter().copied()).collect::<Vec<_>>().join(" ");
+    let shell_cmd = format!("{} 2>/dev/null", arg_str);
+    Command::new("/bin/zsh")
+        .args(["-l", "-c", &shell_cmd])
+        .output()
+        .ok()
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() {
+                String::from_utf8_lossy(&o.stderr).trim().to_string().into()
+            } else {
+                s.into()
+            }
+        })
+        .map(|s| s.lines().next().unwrap_or("??").to_string())
+}
+
+#[cfg(target_os = "windows")]
 fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
     Command::new(cmd)
         .args(args)
