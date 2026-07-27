@@ -189,28 +189,30 @@ fn check_git_bash() -> ToolStatus {
 
 #[cfg(target_os = "windows")]
 fn shell_version() -> Option<String> {
-    // Git Bash / MSYS2
-    Command::new("cmd")
-        .args(["/c", "bash --version 2>&1"])
-        .output().ok()
-        .and_then(|o| {
-            if !o.status.success() { return None; }
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if s.is_empty() { None } else { s.lines().next().map(|l| l.to_string()) }
-        })
+    use std::os::windows::process::CommandExt as _;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut c = Command::new("cmd");
+    c.args(["/c", "bash --version 2>&1"]);
+    c.creation_flags(CREATE_NO_WINDOW);
+    c.output().ok().and_then(|o| {
+        if !o.status.success() { return None; }
+        let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+        if s.is_empty() { None } else { s.lines().next().map(|l| l.to_string()) }
+    })
 }
 
 #[cfg(target_os = "windows")]
 fn wt_version() -> Option<String> {
-    // Windows Terminal
-    Command::new("cmd")
-        .args(["/c", "wt --version 2>&1"])
-        .output().ok()
-        .and_then(|o| {
-            if !o.status.success() { return None; }
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if s.is_empty() { None } else { Some(s) }
-        })
+    use std::os::windows::process::CommandExt as _;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut c = Command::new("cmd");
+    c.args(["/c", "wt --version 2>&1"]);
+    c.creation_flags(CREATE_NO_WINDOW);
+    c.output().ok().and_then(|o| {
+        if !o.status.success() { return None; }
+        let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+        if s.is_empty() { None } else { Some(s) }
+    })
 }
 
 #[cfg(not(target_os = "windows"))]
