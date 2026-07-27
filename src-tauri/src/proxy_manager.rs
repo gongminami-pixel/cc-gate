@@ -216,13 +216,16 @@ impl ProxyManager {
                 continue;
             }
 
-            // One attempt per proxy — fast-fail, no retry loop (retries block UI)
-            match self.start(name, port, &script).await {
-                Ok(s) => {
+            // One attempt with 15s timeout — npx may download packages on first run
+            match tokio::time::timeout(Duration::from_secs(15), self.start(name, port, &script)).await {
+                Ok(Ok(s)) => {
                     tracing::info!("Proxy {} started on port {}", name, s.port);
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     tracing::error!("Proxy {} failed to start: {e}", name);
+                }
+                Err(_) => {
+                    tracing::error!("Proxy {} start timed out after 15s", name);
                 }
             }
         }

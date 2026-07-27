@@ -308,23 +308,29 @@ pub fn deploy_proxy_scripts() -> Result<()> {
     let dest = paths::mimo2codex_dir();
     fs::create_dir_all(&dest)?;
 
-    // claude-proxy.js — compiled into the binary
+    // claude-proxy.js — only write if missing (avoid disk I/O on every launch)
     let cp = dest.join("claude-proxy.js");
-    fs::write(&cp, include_str!("../../claude-proxy.js"))
-        .map_err(|e| AppError::Io(e))?;
-    tracing::info!("Deployed claude-proxy.js → {}", cp.display());
+    if !cp.exists() {
+        fs::write(&cp, include_str!("../../claude-proxy.js"))
+            .map_err(|e| AppError::Io(e))?;
+        tracing::info!("Deployed claude-proxy.js → {}", cp.display());
+    }
 
-    // chat-proxy.js — compiled into the binary
+    // chat-proxy.js
     let chat = dest.join("chat-proxy.js");
-    fs::write(&chat, include_str!("../../chat-proxy.js"))
-        .map_err(|e| AppError::Io(e))?;
-    tracing::info!("Deployed chat-proxy.js → {}", chat.display());
+    if !chat.exists() {
+        fs::write(&chat, include_str!("../../chat-proxy.js"))
+            .map_err(|e| AppError::Io(e))?;
+        tracing::info!("Deployed chat-proxy.js → {}", chat.display());
+    }
 
-    // status-line.sh — compiled into the binary
+    // status-line.sh
     let sl = dest.join("status-line.sh");
-    fs::write(&sl, include_str!("../../scripts/status-line.sh"))
-        .map_err(|e| AppError::Io(e))?;
-    tracing::info!("Deployed status-line.sh → {}", sl.display());
+    if !sl.exists() {
+        fs::write(&sl, include_str!("../../scripts/status-line.sh"))
+            .map_err(|e| AppError::Io(e))?;
+        tracing::info!("Deployed status-line.sh → {}", sl.display());
+    }
 
     Ok(())
 }
