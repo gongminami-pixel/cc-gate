@@ -253,66 +253,54 @@ impl ProxyManager {
     }
 
     pub async fn start(&self, name: &str, port: u16, script: &str) -> Result<ProxyStatus> {
-        // Kill existing process with same name first
         self.stop(name).await.ok();
-
-        // Also kill anything squatting on this port (e.g. leftover from previous CC-Gate crash)
         kill_port_occupant(port);
-        // Brief pause to let the OS release the port
         tokio::time::sleep(Duration::from_millis(300)).await;
 
-        // mimo2codex: try global binary first, fall back to node script
-        // claude-proxy/chat-proxy: direct node <script>
         let is_mimo = name == "mimo2codex";
         tracing::info!(
-            "Starting proxy {} on port {} (node={}, script={})",
-            name, port,
-            self.node_path.display(),
-            script,
+            "Starting proxy {} on port {} (script={})",
+            name, port, script,
         );
 
-        let mut cmd = Command::new(&self.node_path);
-        if is_mimo {
-            // Check if mimo2codex is globally installed (npm install -g)
+        let mut child = if is_mimo {
+            // mimo2codex: try global binary first, then npx.cmd (Windows) / npx (Unix)
             let global = self.bin_dir.join("mimo2codex");
             #[cfg(windows)] let global = global.with_extension("cmd");
             if global.exists() {
-                cmd.arg(script); // use the binary directly (script = path to mimocodex)
+                let mut c = Command::new(&global);
+                c.args(["--port", &port.to_string()]).kill_on_drop(true);
+                crate::win_console::hide_console_async(&mut c);
+                c.spawn().map_err(|e| AppError::Proxy(format!("{name}: {e}")))?
             } else {
-                // Not installed yet — use npx (will install+run in one go)
-                cmd.arg("npx").arg("-y").arg("mimo2codex");
+                #[cfg(windows)] let npx = "npx.cmd";
+                #[cfg(not(windows))] let npx = "npx";
+                let mut c = Command::new(npx);
+                c.args(["-y", "mimo2codex", "--port", &port.to_string()]).kill_on_drop(true);
+                crate::win_console::hide_console_async(&mut c);
+                c.spawn().map_err(|e| AppError::Proxy(format!("{name}: {e}")))?
             }
         } else {
-            cmd.arg(script);
-        }
-        cmd.arg("--port")
-            .arg(port.to_string())
-            .kill_on_drop(true);
-        crate::win_console::hide_console_async(&mut cmd);
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| AppError::Proxy(format!("failed to start {name}: {e}")))?;
+            // claude-proxy / chat-proxy: node <script> --port <port>
+            let mut c = Command::new(&self.node_path);
+            c.arg(script).args(["--port", &port.to_string()]).kill_on_drop(true);
+            crate::win_console::hide_console_async(&mut c);
+            c.spawn().map_err(|e| AppError::Proxy(format!("{name}: {e}")))?
+        };
 
         let pid = child.id();
-
-        // Give the process a moment to start listening
         tokio::time::sleep(Duration::from_millis(500)).await;
 
-        // Verify the child hasn't already crashed
         match child.try_wait() {
             Ok(Some(status)) => {
-                tracing::error!(
-                    "Proxy {} exited immediately with {status} — script path may be wrong or missing deps",
-                    name
-                );
+                tracing::error!("Proxy {} exited immediately with {status}", name);
                 return Err(AppError::Proxy(format!(
-                    "{name} exited immediately (status {status}). Check that the script exists and its dependencies are installed."
+                    "{name} exited immediately (status {status}). Check dependencies."
                 )));
             }
             Ok(None) => {
-                // Still running — good
                 if !port_is_listening(port) {
-                    tracing::warn!("Proxy {} spawned (PID {:?}) but port {} not yet listening", name, pid, port);
+                    tracing::warn!("Proxy {} PID {:?} port {} not yet listening", name, pid, port);
                 }
             }
             Err(e) => {
