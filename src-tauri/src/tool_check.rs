@@ -84,9 +84,12 @@ fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
 
 #[cfg(target_os = "windows")]
 fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .output()
+    use std::os::windows::process::CommandExt as _;
+    let mut c = Command::new(cmd);
+    c.args(args);
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    c.creation_flags(CREATE_NO_WINDOW);
+    c.output()
         .ok()
         .and_then(|o| {
             let mut s = String::from_utf8_lossy(&o.stdout).trim().to_string();
