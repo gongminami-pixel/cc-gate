@@ -261,7 +261,7 @@ impl ProxyManager {
         // Brief pause to let the OS release the port
         tokio::time::sleep(Duration::from_millis(300)).await;
 
-        // mimo2codex: always via npx -y (auto-installs on first run)
+        // mimo2codex: try global binary first, fall back to node script
         // claude-proxy/chat-proxy: direct node <script>
         let is_mimo = name == "mimo2codex";
         tracing::info!(
@@ -273,7 +273,15 @@ impl ProxyManager {
 
         let mut cmd = Command::new(&self.node_path);
         if is_mimo {
-            cmd.arg("npx").arg("-y").arg("mimo2codex");
+            // Check if mimo2codex is globally installed (npm install -g)
+            let global = self.bin_dir.join("mimo2codex");
+            #[cfg(windows)] let global = global.with_extension("cmd");
+            if global.exists() {
+                cmd.arg(script); // use the binary directly (script = path to mimocodex)
+            } else {
+                // Not installed yet — use npx (will install+run in one go)
+                cmd.arg("npx").arg("-y").arg("mimo2codex");
+            }
         } else {
             cmd.arg(script);
         }
