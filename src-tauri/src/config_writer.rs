@@ -329,6 +329,65 @@ pub fn deploy_proxy_scripts() -> Result<()> {
     Ok(())
 }
 
+/// Run the platform installer script to ensure Node.js + npm + mimo2codex are available.
+/// Called once on startup. Non-blocking — fires and forgets.
+pub async fn ensure_environment() {
+    #[cfg(target_os = "windows")]
+    let (script, label) = (
+        include_str!("../../scripts/setup-windows.ps1"),
+        "setup-windows.ps1",
+    );
+    #[cfg(target_os = "macos")]
+    let (script, label) = (
+        include_str!("../../scripts/setup-mac.sh"),
+        "setup-mac.sh",
+    );
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    return;
+
+    let dir = paths::mimo2codex_dir();
+    let _ = fs::create_dir_all(&dir);
+    let path = dir.join(label);
+    // Write script to disk so user can inspect it
+    if let Err(e) = fs::write(&path, script) {
+        tracing::warn!("Failed to write {}: {e}", label);
+        return;
+    }
+
+    let result = {
+        #[cfg(target_os = "windows")]
+        {
+            // Run via powershell
+            let mut cmd = tokio::process::Command::new("powershell");
+            cmd.args(["-ExecutionPolicy", "Bypass", "-File"]);
+            cmd.arg(path.to_string_lossy().to_string());
+            cmd.kill_on_drop(true);
+            crate::win_console::hide_console_async(&mut cmd);
+            cmd.output().await
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let mut cmd = tokio::process::Command::new("bash");
+            cmd.arg(path.to_string_lossy().to_string());
+            cmd.kill_on_drop(true);
+            cmd.output().await
+        }
+    };
+
+    match result {
+        Ok(o) if o.status.success() => {
+            tracing::info!("Environment setup OK");
+        }
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            tracing::warn!("Environment setup exited non-zero: {stderr}");
+        }
+        Err(e) => {
+            tracing::warn!("Environment setup failed: {e}");
+        }
+    }
+}
+
 // ── Shell aliases ────────────────────────────────────────────
 
 const CCGATE_BEGIN: &str = "# >>> CC-Gate aliases >>>";
