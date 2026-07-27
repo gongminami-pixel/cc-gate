@@ -243,32 +243,27 @@ watch(config, () => { if (config.value) { initWorking(); } });
               <span v-if="checking" class="update-spin">⟳</span>
               <span v-else>检查模型更新</span>
             </button>
-            <!-- Proxied → always show Apply and Restore -->
+            <!-- Proxied: Apply + Restore -->
             <template v-if="agentProxied[selectedAgent.id]">
-              <button class="agent-apply-btn" :class="{ ready: isAgentDirty(selectedAgent.id) }"
+              <button class="agent-apply-btn" :class="isAgentDirty(selectedAgent.id) ? 'ready' : 'applied'"
                 :disabled="applyingAgent !== null || !config"
-                @click="onApplyAgent(selectedAgent.id)"
-              >
+                @click="onApplyAgent(selectedAgent.id)">
                 <span v-if="applyingAgent === selectedAgent.id" class="apply-spin">⟳</span>
                 <span v-else>🏠 应用</span>
               </button>
-              <button
-                class="agent-apply-btn restore-btn"
+              <button class="agent-apply-btn restore-btn"
                 :disabled="restoringAgent !== null"
-              @click="onRestoreAgent(selectedAgent.id)"
-            >
-              <span v-if="restoringAgent === selectedAgent.id" class="apply-spin">⟳</span>
-              <span v-else>📡 恢复</span>
-            </button>
+                @click="onRestoreAgent(selectedAgent.id)">
+                <span v-if="restoringAgent === selectedAgent.id" class="apply-spin">⟳</span>
+                <span v-else>📡 恢复</span>
+              </button>
             </template>
 
-            <!-- Not proxied -->
-            <button v-else
-              class="agent-apply-btn"
-              :class="{ ready: isAgentDirty(selectedAgent.id), applied: !isAgentDirty(selectedAgent.id) }"
+            <!-- Unproxied: Apply only -->
+            <button v-else class="agent-apply-btn"
+              :class="isAgentDirty(selectedAgent.id) ? 'ready' : 'applied'"
               :disabled="applyingAgent !== null || !config || !isAgentDirty(selectedAgent.id)"
-              @click="onApplyAgent(selectedAgent.id)"
-            >
+              @click="onApplyAgent(selectedAgent.id)">
               <span v-if="applyingAgent === selectedAgent.id" class="apply-spin">⟳</span>
               <span v-else>🏠 应用</span>
             </button>
@@ -352,6 +347,7 @@ watch(config, () => { if (config.value) { initWorking(); } });
 .agent-apply-btn {
   padding: 4px 11px; border: 1px solid var(--border); border-radius: var(--radius-md);
   font-size: 12px; font-weight: 600; cursor: pointer;
+  background: var(--surface); color: var(--fg);
   transition: all 0.15s ease;
   outline: none; flex-shrink: 0; line-height: 1.4; text-align: center; white-space: nowrap;
 }
@@ -364,7 +360,7 @@ watch(config, () => { if (config.value) { initWorking(); } });
   filter: brightness(1.1);
 }
 .agent-apply-btn.applied {
-  background: var(--surface-soft); color: var(--fg-muted);
+  background: var(--surface-soft); color: var(--fg);
   border-color: var(--border);
 }
 /* ── Restore button ──────────────────────────── */
