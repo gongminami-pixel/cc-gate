@@ -260,6 +260,7 @@ watch(config, () => { if (config.value) { initWorking(); } });
               <span v-if="restoringAgent === selectedAgent.id" class="apply-spin">⟳</span>
               <span v-else>📡 恢复</span>
             </button>
+            </template>
 
             <!-- Not proxied -->
             <button v-else
