@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
+use crate::error::AppError;
 use std::io::Write;
 
 use crate::error::Result;
@@ -296,6 +297,38 @@ pub fn write_claude_settings(cfg: &AppConfig) -> Result<()> {
     write_if_changed(&paths::claude_settings_json(), &serde_json::to_string_pretty(&settings)?)
 }
 
+// ── Deploy proxy scripts to ~/.mimo2codex/ ──────────────────
+
+/// Copy built-in proxy scripts to ~/.mimo2codex/ so the proxy manager can launch them.
+/// Scripts are embedded at compile time via `include_str!` — no runtime file dependency.
+///
+/// `write_if_changed` is not used here because we WANT to overwrite on every apply
+/// to ensure the scripts are always up-to-date with the shipped CC-Gate version.
+pub fn deploy_proxy_scripts() -> Result<()> {
+    let dest = paths::mimo2codex_dir();
+    fs::create_dir_all(&dest)?;
+
+    // claude-proxy.js — compiled into the binary
+    let cp = dest.join("claude-proxy.js");
+    fs::write(&cp, include_str!("../../claude-proxy.js"))
+        .map_err(|e| AppError::Io(e))?;
+    tracing::info!("Deployed claude-proxy.js → {}", cp.display());
+
+    // chat-proxy.js — compiled into the binary
+    let chat = dest.join("chat-proxy.js");
+    fs::write(&chat, include_str!("../../chat-proxy.js"))
+        .map_err(|e| AppError::Io(e))?;
+    tracing::info!("Deployed chat-proxy.js → {}", chat.display());
+
+    // status-line.sh — compiled into the binary
+    let sl = dest.join("status-line.sh");
+    fs::write(&sl, include_str!("../../scripts/status-line.sh"))
+        .map_err(|e| AppError::Io(e))?;
+    tracing::info!("Deployed status-line.sh → {}", sl.display());
+
+    Ok(())
+}
+
 // ── Shell aliases ────────────────────────────────────────────
 
 const CCGATE_BEGIN: &str = "# >>> CC-Gate aliases >>>";
@@ -480,6 +513,9 @@ pub fn write_user_api_keys(cfg: &AppConfig) -> Result<()> {
 pub fn write_all_tool_configs(cfg: &AppConfig) -> Result<()> {
     // Back up original configs before first modification (idempotent)
     crate::backup::ensure_all_backups();
+
+    // Deploy proxy scripts to ~/.mimo2codex/ so CC-Gate can launch them
+    deploy_proxy_scripts()?;
 
     write_codex_config(cfg)?;
     write_model_catalog(cfg)?;
