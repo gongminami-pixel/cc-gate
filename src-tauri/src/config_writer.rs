@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
+use std::path::PathBuf;
 use crate::error::AppError;
 use std::io::Write;
 
@@ -665,6 +666,30 @@ pub fn write_all_tool_configs(cfg: &AppConfig) -> Result<()> {
     write_providers(cfg)?;
     write_user_api_keys(cfg)?;
     write_shell_aliases(cfg)?;
+    clean_stale_bat_files();
+
+/// Delete old .bat / .cmd launcher files that may shadow CC-Gate's shell aliases.
+/// These are typically created by earlier manual setups and can cause
+/// "claude-ds → hermes" or "codex-ds" misrouting.
+fn clean_stale_bat_files() {
+    let home = std::env::var("USERPROFILE").map(PathBuf::from).unwrap_or_default();
+    if home.as_os_str().is_empty() { return; }
+    let candidates: &[&str] = &[
+        "claude.bat", "claude.cmd",
+        "codex.bat", "codex.cmd",
+        "claude-ds.bat", "claude-ds.cmd", "claude-mimo.bat", "claude-mimo.cmd",
+        "claude-glm.bat", "claude-glm.cmd", "claude-qwen.bat", "claude-qwen.cmd",
+        "codex-ds.bat", "codex-ds.cmd", "codex-mimo.bat", "codex-mimo.cmd",
+        "codex-glm.bat", "codex-glm.cmd", "codex-qwen.bat", "codex-qwen.cmd",
+    ];
+    for name in candidates {
+        let p = home.join(name);
+        if p.exists() {
+            let _ = std::fs::remove_file(&p);
+            tracing::info!("Removed stale launcher: {}", p.display());
+        }
+    }
+}
     write_hermes_config(cfg)?;
     write_openclaw_config(cfg)?;
     tracing::info!("All tool configs written");
