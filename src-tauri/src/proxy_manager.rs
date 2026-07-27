@@ -216,8 +216,8 @@ impl ProxyManager {
                 continue;
             }
 
-            // One attempt with 15s timeout — npx may download packages on first run
-            match tokio::time::timeout(Duration::from_secs(15), self.start(name, port, &script)).await {
+            // One attempt with 30s timeout — npx may download packages on first run
+            match tokio::time::timeout(Duration::from_secs(30), self.start(name, port, &script)).await {
                 Ok(Ok(s)) => {
                     tracing::info!("Proxy {} started on port {}", name, s.port);
                 }
@@ -261,8 +261,8 @@ impl ProxyManager {
         // Brief pause to let the OS release the port
         tokio::time::sleep(Duration::from_millis(300)).await;
 
-        // For mimo2codex: always use npx -y (auto-downloads on first run, no global install needed)
-        // For claude-proxy/chat-proxy: user-supplied script path (already deployed by deploy_proxy_scripts)
+        // mimo2codex: always via npx -y (auto-installs on first run)
+        // claude-proxy/chat-proxy: direct node <script>
         let is_mimo = name == "mimo2codex";
         tracing::info!(
             "Starting proxy {} on port {} (node={}, script={})",
@@ -271,14 +271,10 @@ impl ProxyManager {
             script,
         );
 
-        let mut cmd = if is_mimo {
-            let mut c = Command::new(&self.node_path);
-            c.arg("npx").arg("-y").arg("mimo2codex");
-            c
+        let mut cmd = Command::new(&self.node_path);
+        if is_mimo {
+            cmd.arg("npx").arg("-y").arg("mimo2codex");
         } else {
-            Command::new(&self.node_path)
-        };
-        if !is_mimo {
             cmd.arg(script);
         }
         cmd.arg("--port")
