@@ -473,12 +473,12 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
         if let Some(m) = codex_slugs.first().and_then(|s| cfg.models.iter().find(|m| &m.slug == s)) {
             if powershell {
                 out.push_str(&format!(
-                    "function codex {{ $env:CC_GATE_MODEL='{}'; codex --dangerously-bypass-approvals-and-sandbox -c model='{}' -c model_context_window={} -c model_max_output_tokens={} }}\n",
+                    "function codex {{ $env:CC_GATE_MODEL='{}'; $env:OPENAI_API_KEY='proxy'; codex --dangerously-bypass-approvals-and-sandbox -c model='{}' -c model_context_window={} -c model_max_output_tokens={} }}\n",
                     m.slug, m.slug, m.context_window, m.max_output_tokens
                 ));
             } else {
                 out.push_str(&format!(
-                    "alias codex='CC_GATE_MODEL=\"{}\" codex --dangerously-bypass-approvals-and-sandbox -c model=\"{}\" -c model_context_window={} -c model_max_output_tokens={}'\n",
+                    "alias codex='CC_GATE_MODEL=\"{}\" OPENAI_API_KEY=proxy codex --dangerously-bypass-approvals-and-sandbox -c model=\"{}\" -c model_context_window={} -c model_max_output_tokens={}'\n",
                     m.slug, m.slug, m.context_window, m.max_output_tokens
                 ));
             }
@@ -489,12 +489,12 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
                 let aname = codex_alias(slug);
                 if powershell {
                     out.push_str(&format!(
-                        "function {} {{ $env:CC_GATE_MODEL='{}'; codex --dangerously-bypass-approvals-and-sandbox -c model='{}' -c model_context_window={} -c model_max_output_tokens={} }}\n",
+                        "function {} {{ $env:CC_GATE_MODEL='{}'; $env:OPENAI_API_KEY='proxy'; codex --dangerously-bypass-approvals-and-sandbox -c model='{}' -c model_context_window={} -c model_max_output_tokens={} }}\n",
                         aname, slug, m.slug, m.context_window, m.max_output_tokens
                     ));
                 } else {
                     out.push_str(&format!(
-                        "alias {}='CC_GATE_MODEL=\"{}\" codex --dangerously-bypass-approvals-and-sandbox -c model=\"{}\" -c model_context_window={} -c model_max_output_tokens={}'\n",
+                        "alias {}='CC_GATE_MODEL=\"{}\" OPENAI_API_KEY=proxy codex --dangerously-bypass-approvals-and-sandbox -c model=\"{}\" -c model_context_window={} -c model_max_output_tokens={}'\n",
                         aname, slug, m.slug, m.context_window, m.max_output_tokens
                     ));
                 }
