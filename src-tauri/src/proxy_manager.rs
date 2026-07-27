@@ -260,11 +260,11 @@ impl ProxyManager {
             }
             "claude-proxy" => {
                 let p = crate::paths::mimo2codex_dir().join("claude-proxy.js");
-                (8689, if p.exists() { p.to_string_lossy().to_string() } else { "claude-proxy.js".into() })
+                (8689, p.to_string_lossy().to_string())
             }
             "chat-proxy" => {
                 let p = crate::paths::mimo2codex_dir().join("chat-proxy.js");
-                (8690, if p.exists() { p.to_string_lossy().to_string() } else { "chat-proxy.js".into() })
+                (8690, p.to_string_lossy().to_string())
             }
             _ => (0, String::new()),
         }
@@ -279,16 +279,9 @@ impl ProxyManager {
         // Brief pause to let the OS release the port
         tokio::time::sleep(Duration::from_millis(300)).await;
 
-        // For mimo2codex: auto-install if missing, then launch via npx if needed
-        let use_npx = name == "mimo2codex" && {
-            let bin = self.bin_dir.join("mimo2codex");
-            #[cfg(windows)] let bin = bin.with_extension("cmd");
-            !bin.exists()
-        };
-        if use_npx {
-            tracing::info!("mimo2codex binary not in bin_dir, will auto-install and use npx");
-        }
-
+        // For mimo2codex: always use npx -y (auto-downloads on first run, no global install needed)
+        // For claude-proxy/chat-proxy: user-supplied script path (already deployed by deploy_proxy_scripts)
+        let is_mimo = name == "mimo2codex";
         tracing::info!(
             "Starting proxy {} on port {} (node={}, script={})",
             name, port,
@@ -296,14 +289,14 @@ impl ProxyManager {
             script,
         );
 
-        let mut cmd = if use_npx {
+        let mut cmd = if is_mimo {
             let mut c = Command::new(&self.node_path);
             c.arg("npx").arg("-y").arg("mimo2codex");
             c
         } else {
             Command::new(&self.node_path)
         };
-        if !use_npx {
+        if !is_mimo {
             cmd.arg(script);
         }
         cmd.arg("--port")

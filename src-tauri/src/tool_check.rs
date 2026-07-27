@@ -85,8 +85,8 @@ fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
 #[cfg(target_os = "windows")]
 fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
     use std::os::windows::process::CommandExt as _;
-    // Windows: run through cmd /c so .cmd wrappers (npm, codex, etc.) resolve via PATHEXT
-    let full_cmd = format!("{cmd} {}", args.join(" "));
+    // Run through cmd /c with UTF-8 codepage so non-ASCII output renders correctly
+    let full_cmd = format!("chcp 65001 >nul && {cmd} {}", args.join(" "));
     let mut c = Command::new("cmd");
     c.args(["/c", &full_cmd]);
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -94,10 +94,8 @@ fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
     c.output()
         .ok()
         .and_then(|o| {
-            let mut s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if s.is_empty() {
-                s = String::from_utf8_lossy(&o.stderr).trim().to_string();
-            }
+            if !o.status.success() { return None; }
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
             if s.is_empty() { return None; }
             s.lines().find(|l| !l.trim().is_empty()).map(|l| l.to_string())
         })
@@ -191,11 +189,12 @@ fn check_git_bash() -> ToolStatus {
 
 #[cfg(target_os = "windows")]
 fn shell_version() -> Option<String> {
-    // Check via cmd /c where bash (Git Bash/MSYS2)
+    // Git Bash / MSYS2
     Command::new("cmd")
         .args(["/c", "bash --version 2>&1"])
         .output().ok()
         .and_then(|o| {
+            if !o.status.success() { return None; }
             let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
             if s.is_empty() { None } else { s.lines().next().map(|l| l.to_string()) }
         })
@@ -208,6 +207,7 @@ fn wt_version() -> Option<String> {
         .args(["/c", "wt --version 2>&1"])
         .output().ok()
         .and_then(|o| {
+            if !o.status.success() { return None; }
             let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
             if s.is_empty() { None } else { Some(s) }
         })
