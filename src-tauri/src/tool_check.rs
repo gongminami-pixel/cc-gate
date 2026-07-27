@@ -44,10 +44,10 @@ pub fn save_to_cache(results: Vec<ToolStatus>) {
 pub fn check_one(name: &str) -> Option<ToolStatus> {
     match name {
         "node" => Some(check_node_npm()),
+        "mimo2codex" => Some(check_mimo2codex()),
         "python3" => Some(check_python()),
         "codex" => Some(check_codex()),
         "claude" => Some(check_claude_code()),
-        "aider" => Some(check_aider()),
         "bash" => Some(check_git_bash()),
         _ => None,
     }
@@ -56,10 +56,10 @@ pub fn check_one(name: &str) -> Option<ToolStatus> {
 fn check_now() -> Vec<ToolStatus> {
     vec![
         check_node_npm(),
+        check_mimo2codex(),
         check_python(),
         check_codex(),
         check_claude_code(),
-        check_aider(),
         check_git_bash(),
     ]
 }
@@ -85,8 +85,10 @@ fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
 #[cfg(target_os = "windows")]
 fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
     use std::os::windows::process::CommandExt as _;
-    let mut c = Command::new(cmd);
-    c.args(args);
+    // Windows: run through cmd /c so .cmd wrappers (npm, codex, etc.) resolve via PATHEXT
+    let full_cmd = format!("{cmd} {}", args.join(" "));
+    let mut c = Command::new("cmd");
+    c.args(["/c", &full_cmd]);
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     c.creation_flags(CREATE_NO_WINDOW);
     c.output()
@@ -99,6 +101,19 @@ fn run_version(cmd: &str, args: &[&str]) -> Option<String> {
             if s.is_empty() { return None; }
             s.lines().find(|l| !l.trim().is_empty()).map(|l| l.to_string())
         })
+}
+
+fn check_mimo2codex() -> ToolStatus {
+    let ver = run_version("mimo2codex", &["--version"]);
+    ToolStatus {
+        name: "mimo2codex (代理核心)".into(),
+        command: "mimo2codex".into(),
+        installed: ver.is_some(),
+        version: ver,
+        install_cmd: "npm install -g mimo2codex".into(),
+        link: "https://github.com/NousResearch/mimo2codex".into(),
+        category: "runtime".into(),
+    }
 }
 
 fn check_node_npm() -> ToolStatus {
@@ -155,19 +170,6 @@ fn check_claude_code() -> ToolStatus {
         version: ver,
         install_cmd: "npm i -g @anthropic/claude-code".into(),
         link: "https://docs.anthropic.com/claude-code".into(),
-        category: "tool".into(),
-    }
-}
-
-fn check_aider() -> ToolStatus {
-    let ver = run_version("aider", &["--version"]);
-    ToolStatus {
-        name: "Aider".into(),
-        command: "aider".into(),
-        installed: ver.is_some(),
-        version: ver,
-        install_cmd: "pip install aider-chat".into(),
-        link: "https://aider.chat".into(),
         category: "tool".into(),
     }
 }

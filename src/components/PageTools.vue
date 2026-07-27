@@ -16,11 +16,11 @@ interface ToolSlot {
 }
 
 const toolSlots = ref<ToolSlot[]>([
-  { command: "node",    name: "Node.js & npm",   status: "checking", version: null, install_cmd: "", link: "", category: "runtime" },
-  { command: "python3", name: "Python 3",         status: "checking", version: null, install_cmd: "", link: "", category: "runtime" },
+  { command: "node",       name: "Node.js & npm",      status: "checking", version: null, install_cmd: "", link: "", category: "runtime" },
+  { command: "mimo2codex", name: "mimo2codex 代理核心", status: "checking", version: null, install_cmd: "npm install -g mimo2codex", link: "https://github.com/NousResearch/mimo2codex", category: "runtime" },
+  { command: "python3",    name: "Python 3",            status: "checking", version: null, install_cmd: "", link: "", category: "runtime" },
   { command: "codex",   name: "Codex CLI",        status: "checking", version: null, install_cmd: "", link: "", category: "tool" },
   { command: "claude",  name: "Claude Code CLI",  status: "checking", version: null, install_cmd: "", link: "", category: "tool" },
-  { command: "aider",   name: "Aider",            status: "checking", version: null, install_cmd: "", link: "", category: "tool" },
   { command: "bash",    name: "Shell",            status: "checking", version: null, install_cmd: "", link: "", category: "runtime" },
 ]);
 
@@ -108,7 +108,7 @@ function statusLabel(s: ToolSlot): string {
     </div>
 
     <p class="desc" style="margin:0 0 16px">
-      CLI 形式的 Agent（Codex、Claude Code、Aider）需要先安装对应工具才能使用。
+      CLI 形式的 Agent（Codex、Claude Code）需要先安装对应工具才能使用。mimo2codex 是代理核心，必须安装。
       安装完成后 <strong>新开终端</strong> 即可使用 alias 命令。
     </p>
 
