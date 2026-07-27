@@ -71,9 +71,10 @@ pub fn run() {
             let m = proxy_mgr_for_setup.clone();
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                // Ensure Node.js + npm + mimo2codex are installed before starting proxies
-                crate::config_writer::ensure_environment().await;
-                // Auto-start proxies that were previously enabled
+                // Deploy proxy scripts first, then start proxies
+                if let Err(e) = crate::config_writer::deploy_proxy_scripts() {
+                    tracing::warn!("deploy_proxy_scripts failed: {e}");
+                }
                 let _ = m.start_enabled().await;
                 tray::force_refresh(&app_handle).await;
             });

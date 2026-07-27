@@ -216,35 +216,14 @@ impl ProxyManager {
                 continue;
             }
 
-            // Retry loop: up to 5 attempts, 1s → 2s → 4s → 8s → 16s backoff
-            let mut started = false;
-            for attempt in 0..5 {
-                match self.start(name, port, &script).await {
-                    Ok(s) => {
-                        tracing::info!("Proxy {} started on port {} (attempt {})", name, s.port, attempt + 1);
-                        started = true;
-                        break;
-                    }
-                    Err(e) => {
-                        tracing::error!("{} start attempt {} failed: {e}", name, attempt + 1);
-                        if attempt < 4 {
-                            let delay_ms = (1 << attempt) * 1000; // 1s, 2s, 4s, 8s
-                            tracing::info!("Retrying {} in {}ms...", name, delay_ms);
-                            tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
-
-                            // Rewrite providers.json before each mimo2codex retry (self-heal)
-                            if *name == "mimo2codex" {
-                                if let Ok(cfg) = config_store::load() {
-                                    let _ = config_writer::write_providers(&cfg);
-                                }
-                            }
-                        }
-                    }
+            // One attempt per proxy — fast-fail, no retry loop (retries block UI)
+            match self.start(name, port, &script).await {
+                Ok(s) => {
+                    tracing::info!("Proxy {} started on port {}", name, s.port);
                 }
-            }
-
-            if !started {
-                tracing::error!("FATAL: Proxy {} failed to start after 5 attempts", name);
+                Err(e) => {
+                    tracing::error!("Proxy {} failed to start: {e}", name);
+                }
             }
         }
         Ok(())
