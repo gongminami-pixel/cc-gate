@@ -174,17 +174,27 @@ fn check_claude_code() -> ToolStatus {
 
 #[cfg(target_os = "windows")]
 fn check_git_bash() -> ToolStatus {
-    let ver = shell_version();
-    let found = ver.is_some();
+    let found = shell_installed();
+    let ver = if found { shell_version() } else { None };
     ToolStatus {
-        name: "Shell (Bash/WT)".into(),
+        name: "Shell (Bash)".into(),
         command: "bash".into(),
         installed: found,
-        version: ver.or_else(wt_version),
+        version: ver,
         install_cmd: "winget install Git.Git".into(),
         link: "https://git-scm.com/download/win".into(),
         category: "runtime".into(),
     }
+}
+
+#[cfg(target_os = "windows")]
+fn shell_installed() -> bool {
+    use std::os::windows::process::CommandExt as _;
+    const NO_WIN: u32 = 0x0800_0000;
+    let mut c = Command::new("cmd");
+    c.args(["/c", "where bash 2>nul"]);
+    c.creation_flags(NO_WIN);
+    c.output().map(|o| o.status.success()).unwrap_or(false)
 }
 
 #[cfg(target_os = "windows")]
@@ -201,19 +211,6 @@ fn shell_version() -> Option<String> {
     })
 }
 
-#[cfg(target_os = "windows")]
-fn wt_version() -> Option<String> {
-    use std::os::windows::process::CommandExt as _;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let mut c = Command::new("cmd");
-    c.args(["/c", "wt --version 2>&1"]);
-    c.creation_flags(CREATE_NO_WINDOW);
-    c.output().ok().and_then(|o| {
-        if !o.status.success() { return None; }
-        let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-        if s.is_empty() { None } else { Some(s) }
-    })
-}
 
 #[cfg(not(target_os = "windows"))]
 fn check_git_bash() -> ToolStatus {
