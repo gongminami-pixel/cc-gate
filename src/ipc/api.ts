@@ -8,6 +8,12 @@ export async function saveConfig(cfg: AppConfig): Promise<void> { return invoke<
 export async function getAgentList(): Promise<AgentMeta[]> { return invoke<AgentMeta[]>("get_agent_list"); }
 export async function applyAgentConfig(cfg: AppConfig): Promise<ApplyResult> { return invoke<ApplyResult>("apply_agent_config", { cfg }); }
 
+// Backup / restore
+export interface AgentStatus { agent_id: string; proxied: boolean; }
+export interface RestoreResult { agent_id: string; restored: boolean; }
+export async function checkAgentStatus(): Promise<AgentStatus[]> { return invoke<AgentStatus[]>("check_agent_status"); }
+export async function restoreAgent(agentId: string): Promise<RestoreResult> { return invoke<RestoreResult>("restore_agent", { agentId }); }
+
 export interface ShellInfo { config_file: string; reload_cmd: string; platform_os: string; }
 export async function getShellInfo(): Promise<ShellInfo> { return invoke<ShellInfo>("get_shell_info"); }
 

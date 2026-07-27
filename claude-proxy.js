@@ -99,6 +99,288 @@ function httpRequest(url, opts, body) {
   });
 }
 
+// ── Streaming HTTP request (pass-through, no transform) ──────
+function streamPassthrough(url, opts, body, clientRes) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const mod = u.protocol === 'https:' ? https : http;
+    const upstreamReq = mod.request(u, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      timeout: 300000,
+    }, upstreamRes => {
+      if (upstreamRes.statusCode !== 200) {
+        let data = '';
+        upstreamRes.on('data', c => data += c);
+        upstreamRes.on('end', () => {
+          try {
+            const err = JSON.parse(data);
+            clientRes.writeHead(upstreamRes.statusCode, { 'Content-Type': 'application/json' });
+            clientRes.end(JSON.stringify(errorResponse(upstreamRes.statusCode,
+              err?.error?.message || data)));
+          } catch {
+            clientRes.writeHead(upstreamRes.statusCode, { 'Content-Type': 'application/json' });
+            clientRes.end(JSON.stringify(errorResponse(upstreamRes.statusCode, data)));
+          }
+          resolve();
+        });
+        return;
+      }
+      // Streaming success — pipe through
+      clientRes.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
+      upstreamRes.pipe(clientRes);
+      upstreamRes.on('end', () => resolve());
+      upstreamRes.on('error', reject);
+    });
+    upstreamReq.on('error', (e) => {
+      if (!clientRes.headersSent) {
+        clientRes.writeHead(502, { 'Content-Type': 'application/json' });
+        clientRes.end(JSON.stringify(errorResponse(502, `Upstream error: ${e.message}`)));
+      }
+      reject(e);
+    });
+    upstreamReq.on('timeout', () => {
+      upstreamReq.destroy();
+      if (!clientRes.headersSent) {
+        clientRes.writeHead(504, { 'Content-Type': 'application/json' });
+        clientRes.end(JSON.stringify(errorResponse(504, 'Upstream timeout')));
+      }
+      reject(new Error('timeout'));
+    });
+    upstreamReq.write(JSON.stringify(body));
+    upstreamReq.end();
+  });
+}
+
+// ── OpenAI streaming chunks → Anthropic SSE converter ─────────
+function openaiStreamToAnthropicSSE(url, opts, body, clientRes, modelId) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const mod = u.protocol === 'https:' ? https : http;
+    const upstreamReq = mod.request(u, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      timeout: 300000,
+    }, upstreamRes => {
+      if (upstreamRes.statusCode !== 200) {
+        let data = '';
+        upstreamRes.on('data', c => data += c);
+        upstreamRes.on('end', () => {
+          try {
+            const err = JSON.parse(data);
+            clientRes.writeHead(upstreamRes.statusCode, { 'Content-Type': 'application/json' });
+            clientRes.end(JSON.stringify(errorResponse(upstreamRes.statusCode,
+              err?.error?.message || data)));
+          } catch {
+            clientRes.writeHead(upstreamRes.statusCode, { 'Content-Type': 'application/json' });
+            clientRes.end(JSON.stringify(errorResponse(upstreamRes.statusCode, data)));
+          }
+          resolve();
+        });
+        return;
+      }
+
+      clientRes.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
+
+      let msgStarted = false;
+      let blockIdx = -1;
+      let blockKind = null;
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let finalStopReason = 'end_turn';
+      let finished = false;
+      const msgId = `msg_${Date.now()}`;
+      const tcMap = new Map();           // tool call index → {id, name}
+      const pending = [];                // buffer chunks before message_start
+
+      // ── helpers ──────────────────────────────────────────
+      function closeBlock() {
+        if (blockIdx >= 0) {
+          clientRes.write(`event: content_block_stop\ndata: ${
+            JSON.stringify({type:'content_block_stop',index:blockIdx})
+          }\n\n`);
+          blockIdx = -1; blockKind = null;
+        }
+      }
+
+      function flushMsgStart() {
+        if (msgStarted) return;
+        clientRes.write(`event: message_start\ndata: ${
+          JSON.stringify({type:'message_start',message:{
+            id:msgId,type:'message',role:'assistant',content:[],
+            model:modelId,stop_reason:null,stop_sequence:null,
+            usage:{input_tokens:inputTokens}
+          }})
+        }\n\n`);
+        msgStarted = true;
+        for (const fn of pending) fn();
+        pending.length = 0;
+      }
+
+      function emitFinal() {
+        if (finished) return; finished = true;
+        flushMsgStart();
+        closeBlock();
+        clientRes.write(`event: message_delta\ndata: ${
+          JSON.stringify({type:'message_delta',delta:{
+            stop_reason:finalStopReason,stop_sequence:null
+          },usage:{output_tokens:outputTokens}})
+        }\n\n`);
+        clientRes.write(`event: message_stop\ndata: ${
+          JSON.stringify({type:'message_stop'})
+        }\n\n`);
+      }
+
+      // ── data handler ──────────────────────────────────────
+      let buffer = '';
+      upstreamRes.on('data', chunk => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const s = line.trim();
+          if (!s.startsWith('data: ')) continue;
+          const p = s.slice(6).trim();
+          if (p === '[DONE]') { emitFinal(); clientRes.end(); resolve(); return; }
+
+          let obj;
+          try { obj = JSON.parse(p); } catch { continue; }
+          const ch = (obj.choices || [])[0] || {};
+          const d = ch.delta || {};
+          const fr = ch.finish_reason;
+
+          // input tokens — DeepSeek sends this in the LAST chunk
+          if (obj.usage?.prompt_tokens) {
+            inputTokens = obj.usage.prompt_tokens;
+            flushMsgStart();         // now we have the real value, flush everything
+          }
+          // output tokens + stop reason from the finish_reason chunk
+          if (fr) {
+            if (obj.usage?.completion_tokens) outputTokens = obj.usage.completion_tokens;
+            if (fr === 'tool_calls') finalStopReason = 'tool_use';
+            else if (fr === 'length' || fr === 'max_tokens') finalStopReason = 'max_tokens';
+            else finalStopReason = 'end_turn';
+          }
+
+          // ── text content ──────────────────────────────
+          const doText = () => {
+            if (d.content != null) {
+              if (blockKind !== 'text') closeBlock();
+              if (blockIdx < 0) {
+                blockIdx = 0; blockKind = 'text';
+                clientRes.write(`event: content_block_start\ndata: ${
+                  JSON.stringify({type:'content_block_start',index:0,
+                    content_block:{type:'text',text:''}})
+                }\n\n`);
+              }
+              clientRes.write(`event: content_block_delta\ndata: ${
+                JSON.stringify({type:'content_block_delta',index:0,
+                  delta:{type:'text_delta',text:d.content}})
+              }\n\n`);
+            }
+          };
+
+          // ── tool calls ────────────────────────────────
+          const doTools = () => {
+            if (!d.tool_calls) return;
+            for (const tc of d.tool_calls) {
+              const i = tc.index;
+              if (!tcMap.has(i)) tcMap.set(i, { id: tc.id || '', name: '' });
+              const e = tcMap.get(i);
+              if (tc.id) e.id = tc.id;
+              if (tc.function?.name) e.name = tc.function.name;
+
+              if (blockKind !== 'tool_use' || blockIdx !== i) closeBlock();
+              if (blockIdx < 0) {
+                blockIdx = i; blockKind = 'tool_use';
+                clientRes.write(`event: content_block_start\ndata: ${
+                  JSON.stringify({type:'content_block_start',index:i,
+                    content_block:{type:'tool_use',id:e.id,name:e.name,input:{}}})
+                }\n\n`);
+              }
+              if (tc.function?.arguments) {
+                clientRes.write(`event: content_block_delta\ndata: ${
+                  JSON.stringify({type:'content_block_delta',index:i,
+                    delta:{type:'input_json_delta',partial_json:tc.function.arguments}})
+                }\n\n`);
+              }
+            }
+          };
+
+          // ── dispatch ──────────────────────────────────
+          if (!msgStarted && !inputTokens) {
+            // Defer: message_start hasn't been sent yet, buffer content
+            pending.push(doText);
+            pending.push(doTools);
+          } else {
+            flushMsgStart();
+            doText();
+            doTools();
+          }
+        }
+      });
+
+      // ── end handler ────────────────────────────────────────
+      upstreamRes.on('end', () => {
+        if (!finished && buffer.trim().startsWith('data: ') && buffer.trim().slice(6).trim() !== '[DONE]') {
+          try {
+            const obj = JSON.parse(buffer.trim().slice(6).trim());
+            const d = (obj.choices || [])[0]?.delta || {};
+            if (d.content != null) {
+              if (blockKind !== 'text') closeBlock();
+              if (blockIdx < 0) { blockIdx = 0; blockKind = 'text';
+                clientRes.write(`event: content_block_start\ndata: ${
+                  JSON.stringify({type:'content_block_start',index:0,
+                    content_block:{type:'text',text:''}})
+                }\n\n`);
+              }
+              clientRes.write(`event: content_block_delta\ndata: ${
+                JSON.stringify({type:'content_block_delta',index:0,
+                  delta:{type:'text_delta',text:d.content}})
+              }\n\n`);
+            }
+          } catch {}
+        }
+        emitFinal();
+        if (!clientRes.writableEnded) clientRes.end();
+        resolve();
+      });
+
+      upstreamRes.on('error', reject);
+    });
+
+    upstreamReq.on('error', (e) => {
+      console.error(`[stream] Upstream error: ${e.message}`);
+      if (!clientRes.headersSent) {
+        clientRes.writeHead(502, { 'Content-Type': 'application/json' });
+        clientRes.end(JSON.stringify(errorResponse(502, `Upstream error: ${e.message}`)));
+      } else if (!clientRes.writableEnded) {
+        clientRes.end();
+      }
+      reject(e);
+    });
+    upstreamReq.on('timeout', () => {
+      upstreamReq.destroy();
+      if (!clientRes.headersSent) {
+        clientRes.writeHead(504, { 'Content-Type': 'application/json' });
+        clientRes.end(JSON.stringify(errorResponse(504, 'Upstream timeout')));
+      }
+      reject(new Error('timeout'));
+    });
+    upstreamReq.write(JSON.stringify(body));
+    upstreamReq.end();
+  });
+}
+
 // ── Anthropic Messages → OpenAI Chat Completions ─────────────
 function anthropicToOpenAI(anthropicReq) {
   const messages = [];
@@ -291,6 +573,8 @@ function handleModels(res) {
     type: 'model',
     display_name: p.displayName,
     created_at: '2025-01-01T00:00:00Z',
+    context_window: p.contextWindow || 200000,
+    max_output_tokens: p.maxOutputTokens || 16384,
   }));
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ data: models }));
@@ -326,6 +610,47 @@ const server = http.createServer(async (req, res) => {
     const modelId = anthropicReq.model;
     // Strip claude- prefix (added by gateway model discovery)
     const realModelId = modelId.startsWith('claude-') ? modelId.slice(7) : modelId;
+
+    // ── Anthropic-native passthrough (built-in) ──
+    // Claude's own models go directly to api.anthropic.com with the client's OAuth token.
+    // Check against both raw modelId (may have claude- prefix from gateway) and stripped realModelId.
+    const ANTHROPIC_MODELS = ['claude-opus-5', 'claude-opus-4-5', 'claude-sonnet-5', 'claude-haiku-4-5'];
+    const isAnthropicNative = ANTHROPIC_MODELS.includes(modelId) || ANTHROPIC_MODELS.includes(realModelId) ||
+      realModelId.startsWith('claude-opus-') || realModelId.startsWith('claude-sonnet-') || realModelId.startsWith('claude-haiku-');
+    if (isAnthropicNative) {
+      const clientKey = authHeader || 'no-key';
+      console.error(`→ ${realModelId} → Anthropic passthrough (https://api.anthropic.com)${anthropicReq.stream ? ' [stream]' : ''}`);
+      const reqBody = { ...anthropicReq };
+      reqBody.model = realModelId;
+      try {
+        if (anthropicReq.stream) {
+          await streamPassthrough('https://api.anthropic.com/v1/messages', {
+            headers: { 'x-api-key': clientKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+          }, reqBody, res);
+        } else {
+          const result = await httpRequest('https://api.anthropic.com/v1/messages', {
+            headers: { 'x-api-key': clientKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+          }, reqBody);
+          if (result.status === 200) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result.body));
+          } else {
+            const errMsg = result.body?.error?.message || JSON.stringify(result.body);
+            console.error(`← ${realModelId} ERROR ${result.status}: ${errMsg}`);
+            res.writeHead(result.status, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(errorResponse(result.status, errMsg)));
+          }
+        }
+      } catch (e) {
+        console.error(`← ${realModelId} FAIL: ${e.message}`);
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(errorResponse(502, `Upstream error: ${e.message}`)));
+        }
+      }
+      return;
+    }
+
     // Resolve provider via token → model id → provider lookup
     const resolvedModel = TOKEN_MAP[token] || realModelId;
     const provider = PROVIDERS[resolvedModel];
@@ -346,60 +671,71 @@ const server = http.createServer(async (req, res) => {
 
     if (provider.anthropicEndpoint) {
       // ── Anthropic passthrough (provider speaks Anthropic natively) ──
-      console.error(`→ ${modelId} → ${provider.displayName} (passthrough: ${provider.baseUrl})`);
+      console.error(`→ ${modelId} → ${provider.displayName} (passthrough: ${provider.baseUrl})${anthropicReq.stream ? ' [stream]' : ''}`);
+      const reqBody = { ...anthropicReq };
+      reqBody.model = provider.anthropicModel || provider.defaultModel || modelId;
       try {
-        // Use provider's model name (or anthropicModel override for passthrough)
-        const reqBody = { ...anthropicReq };
-        reqBody.model = provider.anthropicModel || provider.defaultModel || modelId;
-        
-        const result = await httpRequest(provider.baseUrl + '/v1/messages', {
-          headers: { 
-            'x-api-key': provider.apiKey,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json'
-          }
-        }, reqBody);
-
-        if (result.status === 200) {
-          // recordUsage(modelId, result.body?.usage || {}, 'claude-proxy');
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result.body));
+        if (anthropicReq.stream) {
+          await streamPassthrough(provider.baseUrl + '/v1/messages', {
+            headers: { 'x-api-key': authHeader || 'no-key', 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+          }, reqBody, res);
         } else {
-          const errMsg = result.body?.error?.message || JSON.stringify(result.body);
-          console.error(`← ${modelId} ERROR ${result.status}: ${errMsg}`);
-          res.writeHead(result.status, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(errorResponse(result.status, errMsg)));
+          const result = await httpRequest(provider.baseUrl + '/v1/messages', {
+            headers: { 'x-api-key': authHeader || 'no-key', 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+          }, reqBody);
+          if (result.status === 200) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result.body));
+          } else {
+            const errMsg = result.body?.error?.message || JSON.stringify(result.body);
+            console.error(`← ${modelId} ERROR ${result.status}: ${errMsg}`);
+            res.writeHead(result.status, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(errorResponse(result.status, errMsg)));
+          }
         }
       } catch (e) {
         console.error(`← ${modelId} FAIL: ${e.message}`);
-        res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(errorResponse(502, `Upstream error: ${e.message}`)));
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(errorResponse(502, `Upstream error: ${e.message}`)));
+        }
       }
     } else {
       // ── OpenAI Chat Completions translation ──
       const openaiReq = anthropicToOpenAI(anthropicReq);
       openaiReq.model = provider.defaultModel;
       const upstreamUrl = `${provider.baseUrl}/chat/completions`;
-      console.error(`→ ${modelId} → ${provider.displayName} (translate: ${upstreamUrl})`);
+      console.error(`→ ${modelId} → ${provider.displayName} (translate: ${upstreamUrl})${anthropicReq.stream ? ' [stream]' : ''}`);
       try {
-        const result = await httpRequest(upstreamUrl, {
-          headers: { 'Authorization': `Bearer ${provider.apiKey}` }
-        }, openaiReq);
-        if (result.status === 200) {
-          const anthropicResp = openAIToAnthropic(result.body, modelId);
-          // recordUsage(modelId, anthropicResp.usage || {}, 'claude-proxy');
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(anthropicResp));
+        if (anthropicReq.stream) {
+          openaiReq.stream = true;
+          // DeepSeek V4 with thinking enabled puts tool_calls in reasoning_content
+          // instead of delta.tool_calls, breaking Claude Code's tool parsing.
+          openaiReq.thinking = { type: 'disabled' };
+          await openaiStreamToAnthropicSSE(upstreamUrl, {
+            headers: { 'Authorization': `Bearer ${provider.apiKey}` }
+          }, openaiReq, res, modelId);
         } else {
-          const errMsg = result.body?.error?.message || JSON.stringify(result.body);
-          console.error(`← ${modelId} ERROR ${result.status}: ${errMsg}`);
-          res.writeHead(result.status, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(errorResponse(result.status, errMsg)));
+          const result = await httpRequest(upstreamUrl, {
+            headers: { 'Authorization': `Bearer ${provider.apiKey}` }
+          }, openaiReq);
+          if (result.status === 200) {
+            const anthropicResp = openAIToAnthropic(result.body, modelId);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(anthropicResp));
+          } else {
+            const errMsg = result.body?.error?.message || JSON.stringify(result.body);
+            console.error(`← ${modelId} ERROR ${result.status}: ${errMsg}`);
+            res.writeHead(result.status, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(errorResponse(result.status, errMsg)));
+          }
         }
       } catch (e) {
         console.error(`← ${modelId} FAIL: ${e.message}`);
-        res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(errorResponse(502, `Upstream error: ${e.message}`)));
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(errorResponse(502, `Upstream error: ${e.message}`)));
+        }
       }
     }
   });

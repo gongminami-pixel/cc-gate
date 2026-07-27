@@ -144,3 +144,27 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + 重写 handoff + 追加 progress/decisions
 - **outcome**: L2 状态更新
 - **next**: git 提交 + push + 双端构建
+
+## 2026-07-27T14:25:00+08:00 — work: claude-proxy.js SSE 流代理 4 bug 修复 + 状态栏配置
+- **touched**: claude-proxy.js ~/.claude/settings.json /tmp/claude-proxy-fixed.js
+- **action**:
+  - 修复 claude-proxy.js `openaiStreamToAnthropicSSE` 函数体 4 个 bug：
+    - 双重 message_stop（#1）→ `emitFinal()` 忘设 finished 互斥
+    - 缺失 tool_use SSE 事件（#2）→ 无 tcMap 追踪 + 无 doTools()
+    - output_tokens 硬编码 0（#3）→ 未从 finish_reason chunk 读 completion_tokens
+    - input_tokens 为 0（#4）→ DeepSeek 最后 chunk 才发 prompt_tokens，需 pending 缓冲
+  - 改用 blockIdx/blockKind 追踪内容块，closeBlock() 按正确 index 发 content_block_stop
+  - emitFinal() 不再调 clientRes.end()，避免 [DONE] 和 end 双重触发
+  - pending[] 同时缓冲 doText + doTools
+  - /v1/models 接口加 context_window + max_output_tokens 字段
+  - 文件同步至 3 处：项目根 claude-proxy.js + ~/.mimo2codex/claude-proxy.js + /tmp/claude-proxy-fixed.js
+  - 状态栏配置（~/.claude/settings.json）：模型名(亮青) | 目录 | ctx: Xk/1.0M | $x.xx
+  - context_window 硬编码各模型正确值：deepseek/glm/mimo→1M, qwen→1048576
+- **outcome**: 代理流正确，工具调用正常，状态栏显示 model+token+cost
+- **next**: git 提交 + push + 双端构建 + Release 发布 + SHA256
+
+## 2026-07-27T14:40:00+08:00 — handoff_ready: 同步
+- **touched**: .harness/waypoints/2026-07-27T06-31-13+08:00.md .harness/handoff.md .harness/progress.md
+- **action**: 落 waypoint + 重写 handoff + 追加 progress
+- **outcome**: L2 状态完整反映 SSE 修复 + 状态栏配置
+- **next**: git 提交 + push + 双端构建 + GitHub Release + SHA256

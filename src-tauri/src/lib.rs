@@ -19,6 +19,7 @@ pub mod commands;
 pub mod usage_db;
 pub mod tool_check;
 pub mod model_catalog;
+pub mod backup;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -122,6 +123,8 @@ pub fn run() {
             check_tools,
             check_one_tool,
             save_tool_cache,
+            crate::backup::check_agent_status,
+            crate::backup::restore_agent,
         ])
         .build(tauri::generate_context!())
         .expect("error while building CC-Gate");

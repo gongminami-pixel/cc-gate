@@ -148,8 +148,11 @@ impl ProxyManager {
     }
 
     /// Start all three proxies unconditionally on app launch.
+    /// Retries up to 5 times with exponential backoff for each proxy.
+    /// For mimo2codex, rewrites providers.json before each retry to self-heal.
+    /// Does NOT kill existing proxies — if port is already listening, skip.
     pub async fn start_enabled(&self) -> Result<()> {
-        // Write providers.json before starting mimo2codex (it validates providers on startup)
+        // Write providers.json before starting mimo2codex
         if let Ok(cfg) = config_store::load() {
             if let Err(e) = config_writer::write_providers(&cfg) {
                 tracing::warn!("write_providers before proxy start failed: {e}");
@@ -158,8 +161,40 @@ impl ProxyManager {
 
         for name in &["mimo2codex", "claude-proxy", "chat-proxy"] {
             let (port, script) = self.proxy_script_for(name);
-            if let Err(e) = self.start(name, port, &script).await {
-                tracing::error!("{} start failed: {e}", name);
+            if port_is_listening(port) {
+                tracing::info!("Proxy {} port {} already listening — skipping startup", name, port);
+                continue;
+            }
+
+            // Retry loop: up to 5 attempts, 1s → 2s → 4s → 8s → 16s backoff
+            let mut started = false;
+            for attempt in 0..5 {
+                match self.start(name, port, &script).await {
+                    Ok(s) => {
+                        tracing::info!("Proxy {} started on port {} (attempt {})", name, s.port, attempt + 1);
+                        started = true;
+                        break;
+                    }
+                    Err(e) => {
+                        tracing::error!("{} start attempt {} failed: {e}", name, attempt + 1);
+                        if attempt < 4 {
+                            let delay_ms = (1 << attempt) * 1000; // 1s, 2s, 4s, 8s
+                            tracing::info!("Retrying {} in {}ms...", name, delay_ms);
+                            tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+
+                            // Rewrite providers.json before each mimo2codex retry (self-heal)
+                            if *name == "mimo2codex" {
+                                if let Ok(cfg) = config_store::load() {
+                                    let _ = config_writer::write_providers(&cfg);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !started {
+                tracing::error!("FATAL: Proxy {} failed to start after 5 attempts", name);
             }
         }
         Ok(())

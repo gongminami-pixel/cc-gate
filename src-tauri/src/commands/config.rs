@@ -37,8 +37,6 @@ pub async fn apply_agent_config(
     config_writer::write_all_tool_configs(&cfg)?;
 
     let mut restarted: Vec<String> = vec![];
-
-    // All three proxies always run while the app is open — restart unconditionally
     for name in &["mimo2codex", "claude-proxy", "chat-proxy"] {
         let (port, script) = proxy_mgr.proxy_script_for(name);
         if let Ok(s) = proxy_mgr.restart(name, port, &script).await {

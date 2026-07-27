@@ -15,22 +15,54 @@ struct ProviderMeta {
     id: &'static str,
     name: &'static str,
     base_url: &'static str,
+    /// Primary env key name. We also check aliases when writing providers.json.
     env_key: &'static str,
+    /// Alternative env key names to fall back to (checked in .env). Order = preference.
+    env_key_aliases: &'static [&'static str],
     feature: Option<&'static str>,
 }
 
 const PROVIDER_META: &[ProviderMeta] = &[
-    ProviderMeta { id: "deepseek",  name: "DeepSeek",       base_url: "https://api.deepseek.com/v1",                                                  env_key: "DS_API_KEY",     feature: None },
-    ProviderMeta { id: "glm",       name: "智谱GLM",        base_url: "https://open.bigmodel.cn/api/paas/v4",                                         env_key: "GLM_API_KEY",    feature: Some("forceParallelToolCalls") },
-    ProviderMeta { id: "qwen",      name: "阿里Qwen-Max",   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",                             env_key: "QWEN_API_KEY",   feature: None },
-    ProviderMeta { id: "qwen38",    name: "阿里Qwen3.8",    base_url: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",          env_key: "QWEN38_API_KEY", feature: None },
-    ProviderMeta { id: "xiaomi",    name: "小米MiMo",       base_url: "https://api.xiaomimimo.com/v1",                                                  env_key: "MIMO_API_KEY",   feature: None },
-    ProviderMeta { id: "anthropic", name: "Anthropic Opus", base_url: "https://api.anthropic.com",                                                      env_key: "",               feature: None },
-    ProviderMeta { id: "openai",    name: "OpenAI GPT",     base_url: "https://api.openai.com/v1",                                                      env_key: "",               feature: None },
+    ProviderMeta { id: "deepseek",  name: "DeepSeek",       base_url: "https://api.deepseek.com/v1",                                                  env_key: "DEEPSEEK_API_KEY", env_key_aliases: &["DS_API_KEY"],     feature: None },
+    ProviderMeta { id: "glm",       name: "智谱GLM",        base_url: "https://open.bigmodel.cn/api/paas/v4",                                         env_key: "GLM_API_KEY",      env_key_aliases: &["ZHIPU_API_KEY"],  feature: Some("forceParallelToolCalls") },
+    ProviderMeta { id: "qwen",      name: "阿里Qwen-Max",   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",                             env_key: "QWEN_API_KEY",     env_key_aliases: &[],                 feature: None },
+    ProviderMeta { id: "qwen38",    name: "阿里Qwen3.8",    base_url: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",          env_key: "QWEN38_API_KEY",   env_key_aliases: &[],                 feature: None },
+    ProviderMeta { id: "xiaomi",    name: "小米MiMo",       base_url: "https://api.xiaomimimo.com/v1",                                                  env_key: "MIMO_API_KEY",     env_key_aliases: &["MINIMAX_API_KEY"], feature: None },
+    ProviderMeta { id: "anthropic", name: "Anthropic Opus", base_url: "https://api.anthropic.com",                                                      env_key: "",                 env_key_aliases: &[],                 feature: None },
+    ProviderMeta { id: "openai",    name: "OpenAI GPT",     base_url: "https://api.openai.com/v1",                                                      env_key: "",                 env_key_aliases: &[],                 feature: None },
 ];
 
 fn meta_by_id(id: &str) -> Option<&'static ProviderMeta> {
     PROVIDER_META.iter().find(|m| m.id == id)
+}
+
+/// Pick the best env key name — the one that actually exists in .env wins.
+/// If the primary key or any alias is present in .env, use that name.
+/// Otherwise default to the primary key (so the user knows what to create).
+fn resolve_env_key(meta: &ProviderMeta) -> String {
+    if meta.env_key.is_empty() { return String::new(); }
+
+    let env_path = paths::mimo_env();
+    if let Ok(content) = std::fs::read_to_string(&env_path) {
+        // Build a set of present key names
+        let present: std::collections::HashSet<&str> = content.lines()
+            .filter_map(|l| l.split_once('=').map(|(k, _)| k.trim()))
+            .collect();
+
+        // Prefer the primary key if it exists
+        if present.contains(meta.env_key) {
+            return meta.env_key.to_string();
+        }
+        // Try each alias
+        for alias in meta.env_key_aliases {
+            if present.contains(alias) {
+                return alias.to_string();
+            }
+        }
+    }
+
+    // Not in .env — return the primary (canonical) name
+    meta.env_key.to_string()
 }
 
 // ── providers.json ────────────────��──────────────────────────
@@ -71,10 +103,11 @@ pub fn write_providers(cfg: &AppConfig) -> Result<()> {
             if meta.is_none() { continue; }
             let meta = meta.unwrap();
             if meta.env_key.is_empty() {
-                // relay-only provider with "direct" routing — skip (must use relay)
+                // Provider with no env key (Anthropic/OpenAI) — skip from providers.json
+                // (claude-proxy.js handles anthropic passthrough as a built-in)
                 continue;
             }
-            (meta.base_url.to_string(), meta.env_key.to_string(), String::new())
+            (meta.base_url.to_string(), resolve_env_key(meta), String::new())
         } else if routing.starts_with("relay:") {
             let relay_name = &routing[6..];
             let relay = relay_by_name.get(relay_name);
@@ -109,6 +142,10 @@ pub fn write_providers(cfg: &AppConfig) -> Result<()> {
         let mut entry = provider_entry;
         if feature.is_some() {
             entry["features"] = serde_json::json!({"forceParallelToolCalls": true});
+        }
+        // Mark Anthropic-native endpoints so claude-proxy.js does native passthrough
+        if provider_id == "anthropic" && routing == "direct" {
+            entry["anthropicEndpoint"] = serde_json::json!(true);
         }
         entries.push(entry);
     }
@@ -209,7 +246,12 @@ pub fn write_model_catalog(cfg: &AppConfig) -> Result<()> {
             "visibility": "list", "priority": m.priority,
             "additional_speed_tiers": [], "service_tiers": [],
             "experimental_supported_tools": [],
-            "truncation_policy": {"mode":"bytes","limit":10000}
+            "truncation_policy": {"mode":"bytes","limit":10000},
+            "base_instructions": format!("You are Codex, a coding agent powered by {}. You help the user with programming tasks. Read the codebase first, ask questions when needed, and implement solutions directly. Prefer existing patterns and keep changes minimal.", m.display_name),
+            "description": format!("{} model via CC-Gate proxy", m.display_name),
+            "default_verbosity": "low",
+            "supports_image_detail_original": false,
+            "upgrade": null
         }))
         .collect();
 
@@ -299,13 +341,13 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
             let aname = codex_alias(slug);
             if powershell {
                 out.push_str(&format!(
-                    "function {} {{ codex --dangerously-bypass-approvals-and-sandbox -c model='{}' -c model_context_window={} -c model_max_output_tokens={} }}\n",
-                    aname, m.slug, m.context_window, m.max_output_tokens
+                    "function {} {{ $env:CC_GATE_MODEL='{}'; codex --dangerously-bypass-approvals-and-sandbox -c model='{}' -c model_context_window={} -c model_max_output_tokens={} }}\n",
+                    aname, slug, m.slug, m.context_window, m.max_output_tokens
                 ));
             } else {
                 out.push_str(&format!(
-                    "alias {}='codex --dangerously-bypass-approvals-and-sandbox -c model=\"{}\" -c model_context_window={} -c model_max_output_tokens={}'\n",
-                    aname, m.slug, m.context_window, m.max_output_tokens
+                    "alias {}='CC_GATE_MODEL=\"{}\" codex --dangerously-bypass-approvals-and-sandbox -c model=\"{}\" -c model_context_window={} -c model_max_output_tokens={}'\n",
+                    aname, slug, m.slug, m.context_window, m.max_output_tokens
                 ));
             }
         }
@@ -315,17 +357,17 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
     for slug in &claude_slugs {
         let aname = claude_alias(slug);
         let cm = format!("claude-{}", slug);
-        let haiku = find_haiku(cfg, slug);
+        // Lock ALL sub-models to the same model — no classifier switching
         let port = cfg.proxy_ports.claude_proxy;
         if powershell {
             out.push_str(&format!(
-                "function {} {{ $env:ANTHROPIC_BASE_URL='http://127.0.0.1:{port}'; $env:ANTHROPIC_AUTH_TOKEN='proxy'; $env:ANTHROPIC_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_OPUS_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_SONNET_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL='claude-{haiku}'; $env:ANTHROPIC_DEFAULT_FABLE_MODEL='{cm}'; $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY='1'; claude --dangerously-skip-permissions }}\n",
-                aname, port=port, cm=cm, haiku=haiku
+                "function {} {{ $env:CC_GATE_MODEL='{slug}'; $env:ANTHROPIC_BASE_URL='http://127.0.0.1:{port}'; $env:ANTHROPIC_AUTH_TOKEN='proxy'; $env:ANTHROPIC_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_OPUS_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_SONNET_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_FABLE_MODEL='{cm}'; $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY='1'; claude --dangerously-skip-permissions }}\n",
+                aname, slug=slug, port=port, cm=cm,
             ));
         } else {
             out.push_str(&format!(
-                "alias {aname}='ANTHROPIC_BASE_URL=\"http://127.0.0.1:{port}\" \\\n  ANTHROPIC_AUTH_TOKEN=proxy \\\n  ANTHROPIC_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=\"claude-{haiku}\" \\\n  ANTHROPIC_DEFAULT_FABLE_MODEL=\"{cm}\" \\\n  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \\\n  claude --dangerously-skip-permissions'\n",
-                aname=aname, port=port, cm=cm, haiku=haiku
+                "alias {aname}='CC_GATE_MODEL=\"{slug}\" \\\n  ANTHROPIC_BASE_URL=\"http://127.0.0.1:{port}\" \\\n  ANTHROPIC_AUTH_TOKEN=proxy \\\n  ANTHROPIC_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_FABLE_MODEL=\"{cm}\" \\\n  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \\\n  claude --dangerously-skip-permissions'\n",
+                aname=aname, slug=slug, port=port, cm=cm,
             ));
         }
     }
@@ -336,13 +378,13 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
         let port = cfg.proxy_ports.chat_proxy;
         if powershell {
             out.push_str(&format!(
-                "function {} {{ $env:OPENAI_API_BASE='http://127.0.0.1:{port}/v1'; $env:OPENAI_API_KEY='proxy'; aider --model openai/{} }}\n",
-                aname, slug
+                "function {} {{ $env:CC_GATE_MODEL='{}'; $env:OPENAI_API_BASE='http://127.0.0.1:{port}/v1'; $env:OPENAI_API_KEY='proxy'; aider --model openai/{} }}\n",
+                aname, slug, slug
             ));
         } else {
             out.push_str(&format!(
-                "alias {}='OPENAI_API_BASE=http://127.0.0.1:{}/v1 OPENAI_API_KEY=proxy aider --model openai/{}'\n",
-                aname, port, slug
+                "alias {}='CC_GATE_MODEL=\"{}\" OPENAI_API_BASE=http://127.0.0.1:{}/v1 OPENAI_API_KEY=proxy aider --model openai/{}'\n",
+                aname, slug, port, slug
             ));
         }
     }
@@ -423,6 +465,9 @@ pub fn write_user_api_keys(cfg: &AppConfig) -> Result<()> {
 // ── All-in-one ───────────────────────────────────────────────
 
 pub fn write_all_tool_configs(cfg: &AppConfig) -> Result<()> {
+    // Back up original configs before first modification (idempotent)
+    crate::backup::ensure_all_backups();
+
     write_codex_config(cfg)?;
     write_model_catalog(cfg)?;
     write_claude_settings(cfg)?;
@@ -598,12 +643,3 @@ fn codex_alias(s: &str) -> String { format!("codex-{}", short(s)) }
 fn claude_alias(s: &str) -> String { format!("claude-{}", short(s)) }
 fn aider_alias(s: &str) -> String { format!("aider-{}", short(s)) }
 
-fn find_haiku(cfg: &AppConfig, slug: &str) -> String {
-    if let Some(m) = cfg.models.iter().find(|m| m.slug == slug) {
-        cfg.models.iter()
-            .filter(|x| x.provider == m.provider && x.slug.contains("flash"))
-            .map(|x| x.slug.clone())
-            .next()
-            .unwrap_or_else(|| slug.to_string())
-    } else { slug.to_string() }
-}

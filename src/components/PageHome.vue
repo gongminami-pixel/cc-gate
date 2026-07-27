@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { AgentId, AgentMeta, AppConfig, ModelDef } from "../types/models";
-import { getAgentList, applyAgentConfig, checkModelUpdates } from "../ipc/api";
+import { getAgentList, applyAgentConfig, checkModelUpdates, checkAgentStatus, restoreAgent, getProxyStatus, startProxy } from "../ipc/api";
 import { useToast } from "../composables/useToast";
 import { useAppConfig } from "../composables/useAppConfig";
 import { listen } from "@tauri-apps/api/event";
@@ -11,37 +11,53 @@ const { config, refresh: refreshConfig } = useAppConfig();
 
 const agents = ref<AgentMeta[]>([]);
 const selectedAgentId = ref<AgentId | null>(null);
-const applying = ref(false);
+const applyingAgent = ref<string | null>(null);
+const restoringAgent = ref<string | null>(null);
+const agentProxied = ref<Record<string, boolean>>({});
 const checking = ref(false);
+const proxyStatuses = ref<any[]>([]);
+const retryingProxy = ref<string | null>(null);
 const newModelSlugs = ref<Set<string>>(new Set());
 const catalogVersion = ref(0);
 const workingModels = ref<Record<AgentId, string[]>>({} as Record<AgentId, string[]>);
 const modelRouting = ref<Record<string, string>>({});
 
 const selectedAgent = computed(() => agents.value.find(a => a.id === selectedAgentId.value));
+const downProxies = computed(() => proxyStatuses.value.filter((s: any) => !s.running));
+
+async function loadProxyStatus() {
+  try { proxyStatuses.value = await getProxyStatus(); } catch { /* not ready */ }
+}
+async function onRetryProxy(name: string) {
+  retryingProxy.value = name;
+  try {
+    await startProxy(name);
+    await loadProxyStatus();
+  } catch (e: any) {
+    toast.err(e?.message ?? String(e));
+  } finally {
+    retryingProxy.value = null;
+  }
+}
 const allModels = computed(() => config.value?.models ?? []);
 const relays = computed(() => config.value?.relays ?? []);
 
-/** 当前编辑状态是否与已保存配置有差异 */
-const dirty = computed(() => {
+/** 单个 agent 的编辑状态是否与已保存配置有差异 */
+function isAgentDirty(agentId: AgentId): boolean {
   if (!config.value) return false;
   // compare agent_models
-  const orig = config.value.agent_models;
-  const cur = workingModels.value;
-  for (const agent of agents.value) {
-    const o = (orig[agent.id] ?? []).slice().sort().join(',');
-    const c = (cur[agent.id] ?? []).slice().sort().join(',');
-    if (o !== c) return true;
-  }
-  // compare model_routing
+  const o = (config.value.agent_models[agentId] ?? []).slice().sort().join(',');
+  const c = (workingModels.value[agentId] ?? []).slice().sort().join(',');
+  if (o !== c) return true;
+  // compare model_routing for this agent's models
   const origR = config.value.model_routing ?? {};
   const curR = modelRouting.value;
-  const allSlugs = new Set([...Object.keys(origR), ...Object.keys(curR)]);
-  for (const s of allSlugs) {
+  const slugs = workingModels.value[agentId] ?? [];
+  for (const s of slugs) {
     if ((origR[s] ?? 'direct') !== (curR[s] ?? 'direct')) return true;
   }
   return false;
-});
+}
 
 function initWorking() {
   if (!config.value) return;
@@ -73,13 +89,30 @@ function setRouting(slug: string, value: string) {
   modelRouting.value = { ...modelRouting.value, [slug]: value };
 }
 
-async function onApply() {
-  if (!config.value) return;
-  const cfg: AppConfig = { ...config.value, agent_models: { ...workingModels.value } as Record<AgentId, string[]>, model_routing: { ...modelRouting.value } };
+/** Agents that share the same config file. */
+const CONFIG_GROUPS: AgentId[][] = [
+  ["codex_cli", "codex_desktop", "reasonix"],
+  ["claude_cli", "claude_desktop"],
+  ["aider", "cursor"],
+];
+function getConfigSiblings(agentId: AgentId): AgentId[] {
+  for (const g of CONFIG_GROUPS) {
+    if (g.includes(agentId)) return g as AgentId[];
+  }
+  return [agentId];
+}
 
-  // Warn before restarting proxy that carries the current chat session
+async function onApplyAgent(agentId: AgentId) {
+  if (!config.value) return;
+  const cfg: AppConfig = {
+    ...config.value,
+    agent_models: { ...config.value.agent_models, [agentId]: [...(workingModels.value[agentId] ?? [])] } as Record<AgentId, string[]>,
+    model_routing: { ...modelRouting.value }
+  };
+
+  const agent = agents.value.find(a => a.id === agentId);
   const willRestartClaude = cfg.autostart_claude_proxy &&
-    agents.value.some(a => a.proxy === "claude-proxy" && (cfg.agent_models[a.id]?.length ?? 0) > 0);
+    agent?.proxy === "claude-proxy" && (cfg.agent_models[agentId]?.length ?? 0) > 0;
   if (willRestartClaude) {
     if (!window.confirm(
       "即将重启 claude-proxy（端口 8689）。\n\n" +
@@ -90,13 +123,35 @@ async function onApply() {
     }
   }
 
-  applying.value = true;
+  applyingAgent.value = agentId;
   try {
     const result = await applyAgentConfig(cfg);
     await refreshConfig();
+    // Mark this agent + siblings that share the same config file as proxied
+    const siblings = getConfigSiblings(agentId);
+    const newStatus = { ...agentProxied.value };
+    for (const sid of siblings) { newStatus[sid] = true; }
+    agentProxied.value = newStatus;
     toast.ok(result.restarted_proxies?.length > 0 ? `已应用，重启：${result.restarted_proxies.join('、')}` : "配置已应用");
   } catch (e: any) { toast.err(e?.message ?? String(e)); }
-  finally { applying.value = false; }
+  finally { applyingAgent.value = null; }
+}
+
+async function onRestoreAgent(agentId: AgentId) {
+  restoringAgent.value = agentId;
+  try {
+    const result = await restoreAgent(agentId);
+    if (result.restored) {
+      const siblings = getConfigSiblings(agentId);
+      const newStatus = { ...agentProxied.value };
+      for (const sid of siblings) { newStatus[sid] = false; }
+      agentProxied.value = newStatus;
+      toast.ok("已恢复到原始配置");
+    } else {
+      toast.ok("该工具当前没有备份");
+    }
+  } catch (e: any) { toast.err(e?.message ?? String(e)); }
+  finally { restoringAgent.value = null; }
 }
 
 function fmtTokens(n: number): string { return n >= 1_000_000 ? `${(n/1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n/1_000).toFixed(0)}K` : String(n); }
@@ -127,6 +182,17 @@ onMounted(async () => {
   initWorking();
   if (agents.value.length > 0) selectedAgentId.value = agents.value[0].id;
 
+  // Load proxy status
+  await loadProxyStatus();
+
+  // Load per-agent proxy status
+  try {
+    const statuses = await checkAgentStatus();
+    const map: Record<string, boolean> = {};
+    for (const s of statuses) { map[s.agent_id] = s.proxied; }
+    agentProxied.value = map;
+  } catch { /* offline or first launch */ }
+
   // Listen for background catalog refreshes
   unlisten = await listen("config-changed", () => {
     refreshConfig();
@@ -140,17 +206,19 @@ watch(config, () => { if (config.value) { initWorking(); } });
   <section class="page">
     <header class="page-header">
       <h2>首页</h2>
-      <button
-        class="apply-btn"
-        :class="{ ready: dirty, applied: !dirty }"
-        :disabled="applying || !config || !dirty"
-        @click="onApply"
-      >
-        <span v-if="applying" class="apply-spin">⟳</span>
-        <span v-else-if="dirty">应用</span>
-        <span v-else>✓ 已保存</span>
-      </button>
     </header>
+
+    <!-- Proxy status warning -->
+    <div v-if="downProxies.length > 0" class="proxy-warn">
+      <span>⚠️ {{ downProxies.length }} 个代理未启动：</span>
+      <span v-for="p in downProxies" :key="p.name" class="proxy-warn-item">
+        {{ p.name }}（{{ p.port }}）
+        <button class="proxy-retry-btn" :disabled="retryingProxy !== null" @click="onRetryProxy(p.name)">
+          <span v-if="retryingProxy === p.name" class="apply-spin">⟳</span>
+          <span v-else>重试</span>
+        </button>
+      </span>
+    </div>
 
     <div class="home-layout">
       <!-- Agent list -->
@@ -158,8 +226,10 @@ watch(config, () => { if (config.value) { initWorking(); } });
         <div v-for="agent in agents" :key="agent.id"
           class="agent-item" :class="{ active: selectedAgentId === agent.id }"
           @click="selectAgent(agent.id)">
-          <div class="agent-name">{{ agent.name }}</div>
-          <div class="agent-meta">{{ agent.tool }} · {{ agent.type === 'cli' ? 'CLI' : '桌面端' }}</div>
+          <div class="agent-info">
+            <div class="agent-name">{{ agent.name }}</div>
+            <div class="agent-meta">{{ agent.tool }} · {{ agent.type === 'cli' ? 'CLI' : '桌面端' }}</div>
+          </div>
         </div>
       </div>
 
@@ -167,11 +237,41 @@ watch(config, () => { if (config.value) { initWorking(); } });
       <div class="model-col">
         <template v-if="selectedAgent">
           <div class="model-header">
-            {{ selectedAgent.name }} 的模型
+            <span>{{ selectedAgent.name }} 的模型</span>
             <span class="dim">({{ workingModels[selectedAgent.id]?.length ?? 0 }}/{{ allModels.length }})</span>
             <button class="update-btn" :disabled="checking" @click="onCheckUpdates">
               <span v-if="checking" class="update-spin">⟳</span>
               <span v-else>检查模型更新</span>
+            </button>
+            <!-- Proxied + dirty → show Apply (routing changed, need to re-apply) -->
+            <button v-if="agentProxied[selectedAgent.id] && isAgentDirty(selectedAgent.id)"
+              class="agent-apply-btn ready"
+              :disabled="applyingAgent !== null || !config"
+              @click="onApplyAgent(selectedAgent.id)"
+            >
+              <span v-if="applyingAgent === selectedAgent.id" class="apply-spin">⟳</span>
+              <span v-else>🏠 应用</span>
+            </button>
+
+            <!-- Proxied + clean → show Restore -->
+            <button v-else-if="agentProxied[selectedAgent.id]"
+              class="agent-apply-btn restore-btn"
+              :disabled="restoringAgent !== null"
+              @click="onRestoreAgent(selectedAgent.id)"
+            >
+              <span v-if="restoringAgent === selectedAgent.id" class="apply-spin">⟳</span>
+              <span v-else>📡 恢复</span>
+            </button>
+
+            <!-- Not proxied -->
+            <button v-else
+              class="agent-apply-btn"
+              :class="{ ready: isAgentDirty(selectedAgent.id), applied: !isAgentDirty(selectedAgent.id) }"
+              :disabled="applyingAgent !== null || !config || !isAgentDirty(selectedAgent.id)"
+              @click="onApplyAgent(selectedAgent.id)"
+            >
+              <span v-if="applyingAgent === selectedAgent.id" class="apply-spin">⟳</span>
+              <span v-else>🏠 应用</span>
             </button>
           </div>
 
@@ -202,6 +302,26 @@ watch(config, () => { if (config.value) { initWorking(); } });
 </template>
 
 <style scoped>
+/* ── Proxy warning banner ───────────────────── */
+.proxy-warn {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 8px 16px; margin-bottom: 8px;
+  background: color-mix(in srgb, #f0a020 15%, transparent);
+  border: 1px solid color-mix(in srgb, #f0a020 40%, transparent);
+  border-radius: var(--radius-md); font-size: 13px; color: var(--fg);
+}
+.proxy-warn-item {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: "SF Mono", monospace; font-size: 12px;
+}
+.proxy-retry-btn {
+  padding: 1px 7px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  font-size: 11px; font-weight: 600; cursor: pointer; background: var(--surface); color: var(--fg);
+  transition: all 0.1s;
+}
+.proxy-retry-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.proxy-retry-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .home-layout { display: flex; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface); min-height: 360px; }
 .agent-col { width: 200px; min-width: 200px; border-right: 1px solid var(--border); background: var(--sidebar-bg); overflow-y: auto; }
 .agent-item { padding: 11px 14px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.1s; }
@@ -211,7 +331,7 @@ watch(config, () => { if (config.value) { initWorking(); } });
 .agent-meta { font-size: 11px; color: var(--fg-dim); margin-top: 1px; }
 
 .model-col { flex: 1; padding: 14px 18px; overflow-y: auto; }
-.model-header { font-size: 15px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.model-header { font-size: 15px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .model-check-row { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); }
 .model-check-row:last-child { border-bottom: none; }
@@ -229,25 +349,34 @@ watch(config, () => { if (config.value) { initWorking(); } });
 }
 .routing-select:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
 
-/* ── Apply button ─────────────────────────── */
-.apply-btn {
-  padding: 8px 20px; border: none; border-radius: var(--radius-lg);
-  font-size: 14px; font-weight: 600; cursor: pointer;
-  transition: all 0.2s ease;
-  outline: none; min-width: 100px;
+/* ── Per-agent apply button ───────────────── */
+.agent-apply-btn {
+  padding: 4px 11px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none; flex-shrink: 0; line-height: 1.4; text-align: center; white-space: nowrap;
 }
-.apply-btn:disabled { cursor: not-allowed; opacity: 0.5; }
-.apply-btn.ready {
+.agent-apply-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.agent-apply-btn.ready {
   background: var(--accent); color: var(--accent-fg);
-  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
 }
-.apply-btn.ready:hover:not(:disabled) {
+.agent-apply-btn.ready:hover:not(:disabled) {
   filter: brightness(1.1);
-  box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 45%, transparent);
 }
-.apply-btn.applied {
+.agent-apply-btn.applied {
   background: var(--surface-soft); color: var(--fg-muted);
-  border: 1px solid var(--border);
+  border-color: var(--border);
+}
+/* ── Restore button ──────────────────────────── */
+.restore-btn {
+  background: var(--surface-soft);
+  border-color: var(--border-strong) !important;
+  color: var(--fg);
+}
+.restore-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 60%, #c00 40%) !important;
+  color: color-mix(in srgb, var(--accent) 60%, #c00 40%);
 }
 .apply-spin {
   display: inline-block;
