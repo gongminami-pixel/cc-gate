@@ -123,24 +123,30 @@ fn find_node() -> (PathBuf, PathBuf) {
         }
     }
 
-    // Last resort: ask the OS where node is (works on any PATH-configured system)
-    if let Ok(out) = std::process::Command::new("where").arg("node").output() {
-        let first = String::from_utf8_lossy(&out.stdout)
-            .lines().next().map(|l| l.trim().to_string()).unwrap_or_default();
-        let p = PathBuf::from(&first);
-        if p.exists() {
-            let bin = p.parent().unwrap_or(&p).to_path_buf();
-            return (p, bin);
+    // Last resort: ask the OS where node is (cmd /c where on Windows, which on Unix)
+    #[cfg(windows)]
+    {
+        if let Ok(out) = std::process::Command::new("cmd").args(["/c", "where node"]).output() {
+            let first = String::from_utf8_lossy(&out.stdout)
+                .lines().next().map(|l| l.trim().to_string()).unwrap_or_default();
+            let p = PathBuf::from(&first);
+            if p.exists() {
+                let bin = p.parent().unwrap_or(&p).to_path_buf();
+                tracing::info!("find_node: found via cmd /c where: {}", p.display());
+                return (p, bin);
+            }
         }
     }
-    // macOS: try `which node` as fallback
-    if let Ok(out) = std::process::Command::new("which").arg("node").output() {
-        let first = String::from_utf8_lossy(&out.stdout)
-            .lines().next().map(|l| l.trim().to_string()).unwrap_or_default();
-        let p = PathBuf::from(&first);
-        if p.exists() {
-            let bin = p.parent().unwrap_or(&p).to_path_buf();
-            return (p, bin);
+    #[cfg(not(windows))]
+    {
+        if let Ok(out) = std::process::Command::new("which").arg("node").output() {
+            let first = String::from_utf8_lossy(&out.stdout)
+                .lines().next().map(|l| l.trim().to_string()).unwrap_or_default();
+            let p = PathBuf::from(&first);
+            if p.exists() {
+                let bin = p.parent().unwrap_or(&p).to_path_buf();
+                return (p, bin);
+            }
         }
     }
 
@@ -273,14 +279,14 @@ impl ProxyManager {
         // Brief pause to let the OS release the port
         tokio::time::sleep(Duration::from_millis(300)).await;
 
-        // For mimo2codex: if the global binary doesn't exist at bin_dir, use npx
+        // For mimo2codex: auto-install if missing, then launch via npx if needed
         let use_npx = name == "mimo2codex" && {
             let bin = self.bin_dir.join("mimo2codex");
             #[cfg(windows)] let bin = bin.with_extension("cmd");
             !bin.exists()
         };
         if use_npx {
-            tracing::info!("mimo2codex not found, using npx mimo2codex");
+            tracing::info!("mimo2codex binary not in bin_dir, will auto-install and use npx");
         }
 
         tracing::info!(

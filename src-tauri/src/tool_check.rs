@@ -176,16 +176,41 @@ fn check_claude_code() -> ToolStatus {
 
 #[cfg(target_os = "windows")]
 fn check_git_bash() -> ToolStatus {
-    let found = which_git_bash();
+    let ver = shell_version();
+    let found = ver.is_some();
     ToolStatus {
-        name: "Git Bash".into(),
+        name: "Shell (Bash/WT)".into(),
         command: "bash".into(),
         installed: found,
-        version: None,
+        version: ver.or_else(wt_version),
         install_cmd: "winget install Git.Git".into(),
         link: "https://git-scm.com/download/win".into(),
         category: "runtime".into(),
     }
+}
+
+#[cfg(target_os = "windows")]
+fn shell_version() -> Option<String> {
+    // Check via cmd /c where bash (Git Bash/MSYS2)
+    Command::new("cmd")
+        .args(["/c", "bash --version 2>&1"])
+        .output().ok()
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() { None } else { s.lines().next().map(|l| l.to_string()) }
+        })
+}
+
+#[cfg(target_os = "windows")]
+fn wt_version() -> Option<String> {
+    // Windows Terminal
+    Command::new("cmd")
+        .args(["/c", "wt --version 2>&1"])
+        .output().ok()
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() { None } else { Some(s) }
+        })
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -199,16 +224,4 @@ fn check_git_bash() -> ToolStatus {
         link: "".into(),
         category: "runtime".into(),
     }
-}
-
-#[cfg(target_os = "windows")]
-fn which_git_bash() -> bool {
-    let paths = [
-        r"C:\Program Files\Git\bin\bash.exe",
-        r"C:\Program Files (x86)\Git\bin\bash.exe",
-    ];
-    for p in &paths {
-        if std::path::PathBuf::from(p).exists() { return true; }
-    }
-    false
 }
