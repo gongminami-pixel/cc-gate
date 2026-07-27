@@ -10,9 +10,9 @@ if [ -z "$TOKEN" ]; then
 fi
 
 REPO="gongminami-pixel/cc-gate"
-TAG="v0.1.1"
-VERSION="0.1.1"
-DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.1_x64.dmg"
+TAG="v0.1.2"
+VERSION="0.1.2"
+DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.2_x64.dmg"
 EXE="src-tauri/target/x86_64-pc-windows-msvc/release/cc-gate.exe"
 MAC_SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
 WIN_SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')

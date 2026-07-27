@@ -168,3 +168,24 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + 重写 handoff + 追加 progress
 - **outcome**: L2 状态完整反映 SSE 修复 + 状态栏配置
 - **next**: git 提交 + push + 双端构建 + GitHub Release + SHA256
+
+## 2026-07-27T16:40:00+08:00 — work: statusLine 嵌入 CC-Gate + model slug 修复 + 全局总则更新
+- **touched**: src-tauri/src/config_writer.rs scripts/status-line.sh ~/.claude/CLAUDE.md
+- **action**:
+  - `write_claude_settings` 改 4 处：
+    - default_model 自动加 `claude-` 前缀匹配 gateway /v1/models 返回的 ID
+    - 部署 `scripts/status-line.sh` 到 `~/.mimo2codex/status-line.sh`
+    - settings.json 写入 statusLine 配置（type=command, command="bash ~/.mimo2codex/status-line.sh"）
+  - 新增 `scripts/status-line.sh`：Claude Code 状态栏脚本（模型名亮青 | 目录 | ctx: K/M简写/正确上下文 | 费用）
+    - 上下文窗口硬编码覆盖（deepseek/glm/mimo→1M, qwen→1048576）
+    - 百分比自己算（不依赖 Claude Code 错误值）
+    - 价格按模型实际定价
+  - 全局 CLAUDE.md 加 Windows 构建提示（cmd.exe, set PATH, 不用 cargo-xwin）
+- **outcome**: 用户安装 CC-Gate 后 Claude Code 自动显示正确状态栏，model ID 匹配 gateway，所有 Agent 上下文窗口正确
+- **next**: git 提交 + bump 0.1.2 + push + 双端构建 + GitHub Release + SHA256
+
+## 2026-07-27T16:50:00+08:00 — handoff_ready: 同步
+- **touched**: .harness/waypoints/2026-07-27T08-49-15+08:00.md .harness/handoff.md .harness/progress.md
+- **action**: 落 waypoint + 重写 handoff + 追加 progress
+- **outcome**: L2 完整反映 statusLine 嵌入 + model slug 修复
+- **next**: bump 0.1.2 + git 提交 + push + 双端构建 + Release + SHA256

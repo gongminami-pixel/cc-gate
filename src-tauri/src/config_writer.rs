@@ -271,14 +271,27 @@ pub fn write_claude_settings(cfg: &AppConfig) -> Result<()> {
     );
 
     // Default model: first assigned (BTreeSet iterates sorted for stability), fallback to deepseek
-    let default_model = claude_slugs.iter().next().cloned()
-        .unwrap_or_else(|| "deepseek-v4-pro".into());
+    let default_model = claude_slugs.iter().next()
+        .map(|s| if s.starts_with("claude-") { s.clone() } else { format!("claude-{}", s) })
+        .unwrap_or_else(|| "claude-deepseek-v4-pro".into());
 
     let base_url = format!("http://127.0.0.1:{}", cfg.proxy_ports.claude_proxy);
+
+    // ── Deploy status-line script ──
+    let status_line_script = paths::mimo2codex_dir().join("status-line.sh");
+    let _ = fs::write(&status_line_script, include_str!("../../scripts/status-line.sh"));
+
+    // StatusLine command: "bash ~/.mimo2codex/status-line.sh" — Claude Code pipes JSON via stdin
+    let status_line_cmd = format!("bash {}", status_line_script.display());
+
     let settings = serde_json::json!({
         "env": {"ANTHROPIC_BASE_URL": base_url},
         "model": default_model,
         "effortLevel": "xhigh",
+        "statusLine": {
+            "type": "command",
+            "command": status_line_cmd,
+        },
     });
     write_if_changed(&paths::claude_settings_json(), &serde_json::to_string_pretty(&settings)?)
 }
