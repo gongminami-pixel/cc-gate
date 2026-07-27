@@ -63,6 +63,29 @@ fn find_node() -> (PathBuf, PathBuf) {
         return pair;
     }
 
+    // Windows: hermes node (CC-Gate's bundled runtime on Windows)
+    #[cfg(windows)]
+    {
+        if let Some(h) = &home {
+            let hermes_node = h.join("AppData").join("Local").join("hermes").join("node").join("node.exe");
+            if hermes_node.exists() {
+                let bin = hermes_node.parent().unwrap().to_path_buf();
+                return (hermes_node, bin);
+            }
+            // Also check Local\node\node.exe (nvm-windows style)
+            let nvmw_node = h.join("AppData").join("Local").join("node").join("node.exe");
+            if nvmw_node.exists() {
+                let bin = nvmw_node.parent().unwrap().to_path_buf();
+                return (nvmw_node, bin);
+            }
+        }
+        // %ProgramFiles%\nodejs\node.exe
+        let pf = PathBuf::from(r"C:\Program Files\nodejs\node.exe");
+        if pf.exists() {
+            return (pf, PathBuf::from(r"C:\Program Files\nodejs"));
+        }
+    }
+
     // Homebrew / system fallbacks (unlikely to have mimo2codex, but better than nothing)
     let candidates: &[(&str, &str)] = &[
         ("/usr/local/bin", "/usr/local/bin"),
@@ -236,11 +259,13 @@ impl ProxyManager {
             script,
         );
 
-        let mut child = Command::new(&self.node_path)
-            .arg(script)
+        let mut cmd = Command::new(&self.node_path);
+        cmd.arg(script)
             .arg("--port")
             .arg(port.to_string())
-            .kill_on_drop(true)
+            .kill_on_drop(true);
+        crate::win_console::hide_console_async(&mut cmd);
+        let mut child = cmd
             .spawn()
             .map_err(|e| AppError::Proxy(format!("failed to start {name}: {e}")))?;
 

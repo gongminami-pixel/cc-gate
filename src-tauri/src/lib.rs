@@ -20,6 +20,14 @@ pub mod usage_db;
 pub mod tool_check;
 pub mod model_catalog;
 pub mod backup;
+#[cfg(windows)]
+mod win_console;
+#[cfg(not(windows))]
+mod win_console {
+    // stub module — hide_console_async is a no-op on non-Windows
+    pub fn hide_console_async(_cmd: &mut tokio::process::Command) {}
+    pub fn hide_console(_cmd: &mut std::process::Command) {}
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
