@@ -207,7 +207,7 @@ model_catalog_json = "cc-switch-model-catalog.json"
 name = "CC-Gate"
 base_url = "{base_url}"
 wire_api = "responses"
-requires_openai_auth = true
+requires_openai_auth = false
 "#);
 
     write_if_changed(&paths::codex_config_toml(), &content)
