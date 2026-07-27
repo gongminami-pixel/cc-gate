@@ -123,6 +123,27 @@ fn find_node() -> (PathBuf, PathBuf) {
         }
     }
 
+    // Last resort: ask the OS where node is (works on any PATH-configured system)
+    if let Ok(out) = std::process::Command::new("where").arg("node").output() {
+        let first = String::from_utf8_lossy(&out.stdout)
+            .lines().next().map(|l| l.trim().to_string()).unwrap_or_default();
+        let p = PathBuf::from(&first);
+        if p.exists() {
+            let bin = p.parent().unwrap_or(&p).to_path_buf();
+            return (p, bin);
+        }
+    }
+    // macOS: try `which node` as fallback
+    if let Ok(out) = std::process::Command::new("which").arg("node").output() {
+        let first = String::from_utf8_lossy(&out.stdout)
+            .lines().next().map(|l| l.trim().to_string()).unwrap_or_default();
+        let p = PathBuf::from(&first);
+        if p.exists() {
+            let bin = p.parent().unwrap_or(&p).to_path_buf();
+            return (p, bin);
+        }
+    }
+
     (PathBuf::from("node"), PathBuf::from("/usr/local/bin"))
 }
 
@@ -252,6 +273,16 @@ impl ProxyManager {
         // Brief pause to let the OS release the port
         tokio::time::sleep(Duration::from_millis(300)).await;
 
+        // For mimo2codex: if the global binary doesn't exist at bin_dir, use npx
+        let use_npx = name == "mimo2codex" && {
+            let bin = self.bin_dir.join("mimo2codex");
+            #[cfg(windows)] let bin = bin.with_extension("cmd");
+            !bin.exists()
+        };
+        if use_npx {
+            tracing::info!("mimo2codex not found, using npx mimo2codex");
+        }
+
         tracing::info!(
             "Starting proxy {} on port {} (node={}, script={})",
             name, port,
@@ -259,9 +290,17 @@ impl ProxyManager {
             script,
         );
 
-        let mut cmd = Command::new(&self.node_path);
-        cmd.arg(script)
-            .arg("--port")
+        let mut cmd = if use_npx {
+            let mut c = Command::new(&self.node_path);
+            c.arg("npx").arg("-y").arg("mimo2codex");
+            c
+        } else {
+            Command::new(&self.node_path)
+        };
+        if !use_npx {
+            cmd.arg(script);
+        }
+        cmd.arg("--port")
             .arg(port.to_string())
             .kill_on_drop(true);
         crate::win_console::hide_console_async(&mut cmd);

@@ -381,57 +381,113 @@ fn generate_powershell_functions(cfg: &AppConfig) -> String {
 }
 
 fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
+    // ── Codex ──────────────────────────────────────────────
     let codex_slugs = cfg.agent_models.get("codex_cli").cloned().unwrap_or_default();
-    for slug in &codex_slugs {
-        if let Some(m) = cfg.models.iter().find(|m| &m.slug == slug) {
-            let aname = codex_alias(slug);
+    if !codex_slugs.is_empty() {
+        // Native alias: "codex" (uses first assigned model, no -suffix)
+        if let Some(m) = codex_slugs.first().and_then(|s| cfg.models.iter().find(|m| &m.slug == s)) {
             if powershell {
                 out.push_str(&format!(
-                    "function {} {{ $env:CC_GATE_MODEL='{}'; codex --dangerously-bypass-approvals-and-sandbox -c model='{}' -c model_context_window={} -c model_max_output_tokens={} }}\n",
-                    aname, slug, m.slug, m.context_window, m.max_output_tokens
+                    "function codex {{ $env:CC_GATE_MODEL='{}'; codex --dangerously-bypass-approvals-and-sandbox -c model='{}' -c model_context_window={} -c model_max_output_tokens={} }}\n",
+                    m.slug, m.slug, m.context_window, m.max_output_tokens
                 ));
             } else {
                 out.push_str(&format!(
-                    "alias {}='CC_GATE_MODEL=\"{}\" codex --dangerously-bypass-approvals-and-sandbox -c model=\"{}\" -c model_context_window={} -c model_max_output_tokens={}'\n",
-                    aname, slug, m.slug, m.context_window, m.max_output_tokens
+                    "alias codex='CC_GATE_MODEL=\"{}\" codex --dangerously-bypass-approvals-and-sandbox -c model=\"{}\" -c model_context_window={} -c model_max_output_tokens={}'\n",
+                    m.slug, m.slug, m.context_window, m.max_output_tokens
+                ));
+            }
+        }
+        // Per-model aliases: codex-{short}
+        for slug in &codex_slugs {
+            if let Some(m) = cfg.models.iter().find(|m| &m.slug == slug) {
+                let aname = codex_alias(slug);
+                if powershell {
+                    out.push_str(&format!(
+                        "function {} {{ $env:CC_GATE_MODEL='{}'; codex --dangerously-bypass-approvals-and-sandbox -c model='{}' -c model_context_window={} -c model_max_output_tokens={} }}\n",
+                        aname, slug, m.slug, m.context_window, m.max_output_tokens
+                    ));
+                } else {
+                    out.push_str(&format!(
+                        "alias {}='CC_GATE_MODEL=\"{}\" codex --dangerously-bypass-approvals-and-sandbox -c model=\"{}\" -c model_context_window={} -c model_max_output_tokens={}'\n",
+                        aname, slug, m.slug, m.context_window, m.max_output_tokens
+                    ));
+                }
+            }
+        }
+    }
+
+    // ── Claude CLI ──────────────────────────────────────────
+    let claude_slugs = cfg.agent_models.get("claude_cli").cloned().unwrap_or_default();
+    if !claude_slugs.is_empty() {
+        // Native alias: "claude" (uses first assigned model)
+        if let Some(slug) = claude_slugs.first() {
+            let cm = format!("claude-{}", slug);
+            let port = cfg.proxy_ports.claude_proxy;
+            if powershell {
+                out.push_str(&format!(
+                    "function claude {{ $env:CC_GATE_MODEL='{slug}'; $env:ANTHROPIC_BASE_URL='http://127.0.0.1:{port}'; $env:ANTHROPIC_AUTH_TOKEN='proxy'; $env:ANTHROPIC_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_OPUS_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_SONNET_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_FABLE_MODEL='{cm}'; $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY='1'; claude --dangerously-skip-permissions }}\n",
+                    slug=slug, port=port, cm=cm,
+                ));
+            } else {
+                out.push_str(&format!(
+                    "alias claude='CC_GATE_MODEL=\"{slug}\" \\\n  ANTHROPIC_BASE_URL=\"http://127.0.0.1:{port}\" \\\n  ANTHROPIC_AUTH_TOKEN=proxy \\\n  ANTHROPIC_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_FABLE_MODEL=\"{cm}\" \\\n  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \\\n  claude --dangerously-skip-permissions'\n",
+                    slug=slug, port=port, cm=cm,
+                ));
+            }
+        }
+        // Per-model aliases: claude-{short}
+        for slug in &claude_slugs {
+            let aname = claude_alias(slug);
+            let cm = format!("claude-{}", slug);
+            let port = cfg.proxy_ports.claude_proxy;
+            if powershell {
+                out.push_str(&format!(
+                    "function {} {{ $env:CC_GATE_MODEL='{slug}'; $env:ANTHROPIC_BASE_URL='http://127.0.0.1:{port}'; $env:ANTHROPIC_AUTH_TOKEN='proxy'; $env:ANTHROPIC_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_OPUS_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_SONNET_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_FABLE_MODEL='{cm}'; $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY='1'; claude --dangerously-skip-permissions }}\n",
+                    aname, slug=slug, port=port, cm=cm,
+                ));
+            } else {
+                out.push_str(&format!(
+                    "alias {aname}='CC_GATE_MODEL=\"{slug}\" \\\n  ANTHROPIC_BASE_URL=\"http://127.0.0.1:{port}\" \\\n  ANTHROPIC_AUTH_TOKEN=proxy \\\n  ANTHROPIC_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_FABLE_MODEL=\"{cm}\" \\\n  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \\\n  claude --dangerously-skip-permissions'\n",
+                    aname=aname, slug=slug, port=port, cm=cm,
                 ));
             }
         }
     }
 
-    let claude_slugs = cfg.agent_models.get("claude_cli").cloned().unwrap_or_default();
-    for slug in &claude_slugs {
-        let aname = claude_alias(slug);
-        let cm = format!("claude-{}", slug);
-        // Lock ALL sub-models to the same model — no classifier switching
-        let port = cfg.proxy_ports.claude_proxy;
-        if powershell {
-            out.push_str(&format!(
-                "function {} {{ $env:CC_GATE_MODEL='{slug}'; $env:ANTHROPIC_BASE_URL='http://127.0.0.1:{port}'; $env:ANTHROPIC_AUTH_TOKEN='proxy'; $env:ANTHROPIC_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_OPUS_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_SONNET_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_FABLE_MODEL='{cm}'; $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY='1'; claude --dangerously-skip-permissions }}\n",
-                aname, slug=slug, port=port, cm=cm,
-            ));
-        } else {
-            out.push_str(&format!(
-                "alias {aname}='CC_GATE_MODEL=\"{slug}\" \\\n  ANTHROPIC_BASE_URL=\"http://127.0.0.1:{port}\" \\\n  ANTHROPIC_AUTH_TOKEN=proxy \\\n  ANTHROPIC_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_FABLE_MODEL=\"{cm}\" \\\n  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \\\n  claude --dangerously-skip-permissions'\n",
-                aname=aname, slug=slug, port=port, cm=cm,
-            ));
-        }
-    }
-
+    // ── Aider ──────────────────────────────────────────────
     let aider_slugs = cfg.agent_models.get("aider").cloned().unwrap_or_default();
-    for slug in &aider_slugs {
-        let aname = aider_alias(slug);
-        let port = cfg.proxy_ports.chat_proxy;
-        if powershell {
-            out.push_str(&format!(
-                "function {} {{ $env:CC_GATE_MODEL='{}'; $env:OPENAI_API_BASE='http://127.0.0.1:{port}/v1'; $env:OPENAI_API_KEY='proxy'; aider --model openai/{} }}\n",
-                aname, slug, slug
-            ));
-        } else {
-            out.push_str(&format!(
-                "alias {}='CC_GATE_MODEL=\"{}\" OPENAI_API_BASE=http://127.0.0.1:{}/v1 OPENAI_API_KEY=proxy aider --model openai/{}'\n",
-                aname, slug, port, slug
-            ));
+    if !aider_slugs.is_empty() {
+        // Native alias: "aider"
+        if let Some(slug) = aider_slugs.first() {
+            let port = cfg.proxy_ports.chat_proxy;
+            if powershell {
+                out.push_str(&format!(
+                    "function aider {{ $env:CC_GATE_MODEL='{}'; $env:OPENAI_API_BASE='http://127.0.0.1:{port}/v1'; $env:OPENAI_API_KEY='proxy'; aider --model openai/{} }}\n",
+                    slug, slug
+                ));
+            } else {
+                out.push_str(&format!(
+                    "alias aider='CC_GATE_MODEL=\"{}\" OPENAI_API_BASE=http://127.0.0.1:{}/v1 OPENAI_API_KEY=proxy aider --model openai/{}'\n",
+                    slug, port, slug
+                ));
+            }
+        }
+        // Per-model: aider-{short}
+        for slug in &aider_slugs {
+            let aname = aider_alias(slug);
+            let port = cfg.proxy_ports.chat_proxy;
+            if powershell {
+                out.push_str(&format!(
+                    "function {} {{ $env:CC_GATE_MODEL='{}'; $env:OPENAI_API_BASE='http://127.0.0.1:{port}/v1'; $env:OPENAI_API_KEY='proxy'; aider --model openai/{} }}\n",
+                    aname, slug, slug
+                ));
+            } else {
+                out.push_str(&format!(
+                    "alias {}='CC_GATE_MODEL=\"{}\" OPENAI_API_BASE=http://127.0.0.1:{}/v1 OPENAI_API_KEY=proxy aider --model openai/{}'\n",
+                    aname, slug, port, slug
+                ));
+            }
         }
     }
 }
