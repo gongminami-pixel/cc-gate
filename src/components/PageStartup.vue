@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import type { AppConfig, ProxyStatus } from "../types/models";
-import { setAppAutostart, getAppAutostartStatus, getProxyStatus } from "../ipc/api";
+import { setAppAutostart, getAppAutostartStatus, getProxyStatus, startProxy, restartProxy } from "../ipc/api";
 import { useToast } from "../composables/useToast";
 
 const props = defineProps<{ config: AppConfig | null }>();
@@ -10,6 +10,7 @@ const toast = useToast();
 const autostartEnabled = ref(false);
 const autostartBusy = ref(false);
 const proxyStatuses = ref<ProxyStatus[]>([]);
+const busyProxy = ref<string | null>(null);
 let statusTimer: ReturnType<typeof setInterval> | null = null;
 
 async function loadAutostart() {
@@ -22,6 +23,21 @@ async function onToggleAutostart() {
   autostartBusy.value = true;
   try { const r = await setAppAutostart(!autostartEnabled.value); autostartEnabled.value = r.enabled; toast.ok(r.enabled ? "已启用登录时自动启动" : "已关闭登录时自动启动"); }
   catch (e: any) { toast.err(e?.message ?? String(e)); } finally { autostartBusy.value = false; }
+}
+
+async function onProxyAction(name: string, running: boolean) {
+  busyProxy.value = name;
+  try {
+    if (running) {
+      await restartProxy(name);
+      toast.ok(`${name} 已重启`);
+    } else {
+      await startProxy(name);
+      toast.ok(`${name} 已启动`);
+    }
+    await loadProxyStatuses();
+  } catch (e: any) { toast.err(e?.message ?? String(e)); }
+  finally { busyProxy.value = null; }
 }
 
 const STATUSBAR_META: { name: string; key: string; port: number; label: string; desc: string }[] = [
@@ -76,6 +92,10 @@ onUnmounted(() => {
               {{ statusFor(m.key)?.running ? '运行中' : '未启动' }}
             </span>
             <span v-if="statusFor(m.key)?.running && statusFor(m.key)?.pid" class="status-pid">PID {{ statusFor(m.key)?.pid }}</span>
+            <button class="proxy-action-btn" :disabled="busyProxy !== null" @click="onProxyAction(m.key, statusFor(m.key)?.running ?? false)">
+              <span v-if="busyProxy === m.key" class="apply-spin">⟳</span>
+              <span v-else>{{ statusFor(m.key)?.running ? '重启' : '重试' }}</span>
+            </button>
           </div>
           <div class="status-desc">{{ m.desc }}</div>
         </div>
@@ -106,5 +126,14 @@ onUnmounted(() => {
 .status-state { font-size: 12px; color: var(--fg-dim); }
 .status-state.running { color: #22c55e; font-weight: 600; }
 .status-pid { font-size: 11px; color: var(--fg-muted); margin-left: auto; font-family: "SF Mono", "Menlo", monospace; }
+.proxy-action-btn {
+  margin-left: auto; padding: 2px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  font-size: 11px; font-weight: 600; cursor: pointer; background: var(--surface); color: var(--fg);
+  transition: all 0.1s; outline: none; white-space: nowrap;
+}
+.proxy-action-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.proxy-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.apply-spin { display: inline-block; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .status-desc { font-size: 12px; color: var(--fg-dim); margin-top: 4px; margin-left: 17px; line-height: 1.5; }
 </style>

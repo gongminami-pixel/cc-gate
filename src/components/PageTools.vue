@@ -17,7 +17,7 @@ interface ToolSlot {
 
 const toolSlots = ref<ToolSlot[]>([
   { command: "node",       name: "Node.js & npm",      status: "checking", version: null, install_cmd: "", link: "", category: "runtime" },
-  { command: "mimo2codex", name: "mimo2codex 代理核心", status: "checking", version: null, install_cmd: "npm install -g mimo2codex", link: "https://github.com/NousResearch/mimo2codex", category: "runtime" },
+  { command: "mimo2codex", name: "mimo2codex 代理核心", status: "checking", version: null, install_cmd: "", link: "", category: "runtime" },
   { command: "python3",    name: "Python 3",            status: "checking", version: null, install_cmd: "", link: "", category: "runtime" },
   { command: "codex",   name: "Codex CLI",        status: "checking", version: null, install_cmd: "", link: "", category: "tool" },
   { command: "claude",  name: "Claude Code CLI",  status: "checking", version: null, install_cmd: "", link: "", category: "tool" },
@@ -128,7 +128,6 @@ function statusLabel(s: ToolSlot): string {
             <code v-if="t.install_cmd" class="tool-row-cmd">{{ t.install_cmd }}</code>
           </template>
         </div>
-        <a v-if="t.link" :href="t.link" target="_blank" class="btn ghost" style="font-size:13px">下载 →</a>
       </div>
     </div>
   </section>
