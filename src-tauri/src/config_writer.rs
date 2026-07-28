@@ -69,6 +69,16 @@ fn resolve_env_key(meta: &ProviderMeta) -> String {
 
 // ── providers.json ────────────────��──────────────────────────
 
+/// Sanitize a provider/routing identifier: keep only [a-z0-9_-].
+/// Non-ASCII characters (e.g. Chinese) are removed to comply with
+/// mimo2codex provider ID validation.
+fn sanitize_provider_id(raw: &str) -> String {
+    raw.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .collect::<String>()
+        .to_lowercase()
+}
+
 pub fn write_providers(cfg: &AppConfig) -> Result<()> {
     // Collect enabled model slugs from all agents that write_providers
     let enabled_slugs: BTreeSet<String> = agent_list().iter()
@@ -115,7 +125,7 @@ pub fn write_providers(cfg: &AppConfig) -> Result<()> {
             let relay = relay_by_name.get(relay_name);
             if relay.is_none() { continue; }
             let relay = relay.unwrap();
-            let env_key = format!("RELAY_{}_API_KEY", relay_name.to_uppercase().replace(' ', "_").replace('-', "_"));
+            let env_key = format!("RELAY_{}_API_KEY", sanitize_provider_id(relay_name).to_uppercase());
             (relay.url.clone(), env_key, format!(" via {}", relay_name))
         } else {
             continue;
@@ -128,7 +138,9 @@ pub fn write_providers(cfg: &AppConfig) -> Result<()> {
         let feature = meta_by_id(provider_id).and_then(|m| m.feature);
 
         let provider_entry = serde_json::json!({
-            "id": format!("{}-{}", provider_id, routing.replace(':', "-")),
+            "id": format!("{}-{}",
+                sanitize_provider_id(provider_id),
+                sanitize_provider_id(&routing.replace(':', "-"))),
             "name": display_name,
             "baseUrl": base_url,
             "envKey": env_key,
