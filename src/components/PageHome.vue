@@ -146,6 +146,8 @@ async function onRestoreAgent(agentId: AgentId) {
       const newStatus = { ...agentProxied.value };
       for (const sid of siblings) { newStatus[sid] = false; }
       agentProxied.value = newStatus;
+      await refreshConfig();
+      initWorking();
       toast.ok("已恢复到原始配置");
     } else {
       toast.ok("该工具当前没有备份");
@@ -252,7 +254,7 @@ watch(config, () => { if (config.value) { initWorking(); } });
             </button>
             <button v-else class="agent-apply-btn"
               :class="isAgentDirty(selectedAgent.id) ? 'ready' : 'applied'"
-              :disabled="applyingAgent !== null || !config || !isAgentDirty(selectedAgent.id)"
+              :disabled="applyingAgent !== null || !config"
               @click="onApplyAgent(selectedAgent.id)">
               <span v-if="applyingAgent === selectedAgent.id" class="apply-spin">⟳</span>
               <span v-else>🏠 应用</span>
