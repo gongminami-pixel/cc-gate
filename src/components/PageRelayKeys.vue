@@ -45,10 +45,11 @@ const editingRelay = ref<{ oldName: string; name: string; url: string; anthropic
   { oldName: "", name: "", url: "", anthropicUrl: "", key: "", masked: true }
 );
 const relayBusy = ref(false);
+const showRelayModal = ref(false);
 
-function startNewRelay() { editingRelay.value = { oldName: "", name: "", url: "", anthropicUrl: "", key: "", masked: true }; }
-function startEditRelay(r: { name: string; url: string; anthropic_url?: string; key: string }) { editingRelay.value = { oldName: r.name, name: r.name, url: r.url, anthropicUrl: r.anthropic_url ?? "", key: r.key, masked: true }; }
-function cancelRelay() { editingRelay.value = { oldName: "", name: "", url: "", anthropicUrl: "", key: "", masked: true }; }
+function startNewRelay() { editingRelay.value = { oldName: "", name: "", url: "", anthropicUrl: "", key: "", masked: true }; showRelayModal.value = true; }
+function startEditRelay(r: { name: string; url: string; anthropic_url?: string; key: string }) { editingRelay.value = { oldName: r.name, name: r.name, url: r.url, anthropicUrl: r.anthropic_url ?? "", key: r.key, masked: true }; showRelayModal.value = true; }
+function cancelRelay() { editingRelay.value = { oldName: "", name: "", url: "", anthropicUrl: "", key: "", masked: true }; showRelayModal.value = false; }
 function pickPreset(p: { name: string; url: string; anthropicUrl: string }) { editingRelay.value.name = p.name; editingRelay.value.url = p.url; editingRelay.value.anthropicUrl = p.anthropicUrl; }
 
 async function onSaveRelay() {
@@ -134,31 +135,46 @@ const apiKeyGroups = [
         </div>
         <div v-else class="dim sec-empty">还没有添加中转站</div>
 
-        <div class="add-relay-box">
-          <div class="relay-add-header">{{ editingRelay.oldName ? '编辑中转站' : '添加中转站' }}</div>
-          <div class="preset-row gap8 mb8">
-            <span class="dim" style="font-size:12px">快速填入：</span>
-            <button v-for="p in relayPresets" :key="p.name" class="btn ghost" style="font-size:12px;padding:2px 8px" @click="pickPreset(p)">{{ p.name }}</button>
+        <button class="btn" style="margin-top:8px" @click="startNewRelay">+ 添加中转站</button>
+      </div>
+    </div>
+
+    <!-- 中转站弹窗 -->
+    <div v-if="showRelayModal" class="modal-overlay" @click.self="cancelRelay">
+      <div class="modal-dialog">
+        <div class="modal-title">{{ editingRelay.oldName ? '编辑中转站' : '添加中转站' }}</div>
+
+        <div class="modal-field">
+          <label>名称 <span class="dim" style="font-weight:400">(必填)</span></label>
+          <input v-model="editingRelay.name" type="text" placeholder="我的中转" />
+        </div>
+
+        <div class="modal-field">
+          <label>OpenAI URL <span class="dim" style="font-weight:400">(必填)</span></label>
+          <input v-model="editingRelay.url" type="text" placeholder="https://api.xxx.com/v1" style="font-family:monospace" />
+        </div>
+
+        <div class="modal-field">
+          <label>API Key</label>
+          <div class="key-input-wrap">
+            <input :type="editingRelay.masked ? 'password' : 'text'" placeholder="sk-…" :value="editingRelay.key" @input="editingRelay.key = ($event.target as HTMLInputElement).value" @focus="editingRelay.masked = false" @blur="editingRelay.masked = true" />
+            <span v-if="editingRelay.key" class="key-clear" @mousedown.prevent="editingRelay.key = ''">×</span>
           </div>
-          <div class="field-row">
-            <div class="field"><label>名称</label><input v-model="editingRelay.name" type="text" placeholder="我的中转" style="font-size:14px" /></div>
-            <div class="field" style="flex:2"><label>OpenAI URL <span class="dim" style="font-weight:400">(必填)</span></label><input v-model="editingRelay.url" type="text" placeholder="https://api.xxx.com/v1" style="font-family:monospace;font-size:14px" /></div>
-            <div class="field"><label>API Key</label>
-              <div class="key-input-wrap">
-                <input :type="editingRelay.masked ? 'password' : 'text'" :placeholder="'sk-…'" :value="editingRelay.key" @input="editingRelay.key = ($event.target as HTMLInputElement).value" @focus="editingRelay.masked = false" @blur="editingRelay.masked = true" style="font-size:14px" />
-                <span v-if="editingRelay.key" class="key-clear" @mousedown.prevent="editingRelay.key = ''">×</span>
-              </div>
-            </div>
-          </div>
-          <div class="field-row">
-            <div class="field" style="flex:2"><label>Anthropic URL <span class="dim" style="font-weight:400">(选填，Claude Code 原生协议)</span></label><input v-model="editingRelay.anthropicUrl" type="text" placeholder="留空则使用上方 OpenAI URL" style="font-family:monospace;font-size:14px" /></div>
-            <div class="field"><!-- spacer --></div>
-          </div>
-          <div class="gap8">
-            <button class="btn primary" :disabled="relayBusy || !editingRelay.name.trim() || !editingRelay.url.trim()" @click="onSaveRelay">保存</button>
-            <button v-if="editingRelay.oldName || editingRelay.name || editingRelay.url" class="btn" @click="cancelRelay">取消</button>
-            <button v-else class="btn" @click="startNewRelay">+ 添加中转站</button>
-          </div>
+        </div>
+
+        <div class="modal-field">
+          <label>Anthropic URL <span class="dim" style="font-weight:400">(选填，Claude Code 原生协议)</span></label>
+          <input v-model="editingRelay.anthropicUrl" type="text" placeholder="留空则使用上方 OpenAI URL" style="font-family:monospace" />
+        </div>
+
+        <div class="modal-presets">
+          <span class="dim" style="font-size:12px">快速填入：</span>
+          <button v-for="p in relayPresets" :key="p.name" class="btn ghost" style="font-size:12px;padding:2px 8px" @click="pickPreset(p)">{{ p.name }}</button>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn" @click="cancelRelay">取消</button>
+          <button class="btn primary" :disabled="relayBusy || !editingRelay.name.trim() || !editingRelay.url.trim()" @click="onSaveRelay">保存</button>
         </div>
       </div>
     </div>
@@ -203,11 +219,40 @@ const apiKeyGroups = [
 .relay-url { font-family: "SF Mono", "Menlo", monospace; font-size: 13px; }
 .relay-actions { display: flex; gap: 4px; }
 
-.add-relay-box { background: var(--surface-soft); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; }
-.relay-add-header { font-size: 14px; color: var(--fg-muted); margin-bottom: 8px; }
-.preset-row { display: flex; align-items: center; flex-wrap: wrap; }
-.add-relay-box .field label { font-size: 14px; }
-.add-relay-box .field input { padding: 6px 10px; }
+/* modal */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10000;
+}
+.modal-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 460px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+}
+.modal-title { font-size: 16px; font-weight: 700; margin-bottom: 18px; }
+.modal-field { margin-bottom: 14px; }
+.modal-field label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.modal-field input {
+  width: 100%; box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  height: 34px;
+}
+.modal-field input:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.modal-presets { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 18px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 .key-input-wrap { position: relative; display: flex; align-items: center; }
 .key-input-wrap input { flex: 1; padding-right: 28px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--fg); outline: none; font-size: 14px; font-family: "SF Mono", "Menlo", monospace; height: 34px; padding: 4px 28px 4px 10px; transition: border-color 0.15s, box-shadow 0.15s; }
