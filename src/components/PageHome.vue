@@ -243,23 +243,13 @@ watch(config, () => { if (config.value) { initWorking(); } });
               <span v-if="checking" class="update-spin">⟳</span>
               <span v-else>检查模型更新</span>
             </button>
-            <!-- Proxied: Apply + Restore -->
-            <template v-if="agentProxied[selectedAgent.id]">
-              <button class="agent-apply-btn" :class="isAgentDirty(selectedAgent.id) ? 'ready' : 'applied'"
-                :disabled="applyingAgent !== null || !config"
-                @click="onApplyAgent(selectedAgent.id)">
-                <span v-if="applyingAgent === selectedAgent.id" class="apply-spin">⟳</span>
-                <span v-else>🏠 应用</span>
-              </button>
-              <button class="agent-apply-btn restore-btn"
-                :disabled="restoringAgent !== null"
-                @click="onRestoreAgent(selectedAgent.id)">
-                <span v-if="restoringAgent === selectedAgent.id" class="apply-spin">⟳</span>
-                <span v-else>📡 恢复</span>
-              </button>
-            </template>
-
-            <!-- Unproxied: Apply only -->
+            <!-- Proxied → 恢复按钮；Unproxied → 应用按钮 -->
+            <button v-if="agentProxied[selectedAgent.id]" class="agent-apply-btn restore-btn"
+              :disabled="restoringAgent !== null"
+              @click="onRestoreAgent(selectedAgent.id)">
+              <span v-if="restoringAgent === selectedAgent.id" class="apply-spin">⟳</span>
+              <span v-else>📡 恢复</span>
+            </button>
             <button v-else class="agent-apply-btn"
               :class="isAgentDirty(selectedAgent.id) ? 'ready' : 'applied'"
               :disabled="applyingAgent !== null || !config || !isAgentDirty(selectedAgent.id)"
