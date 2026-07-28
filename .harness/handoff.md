@@ -1,6 +1,6 @@
 # Harness Handoff
 
-_Last updated: 2026-07-27T16:50:00+08:00_
+_Last updated: 2026-07-28T18:40:00+08:00_
 
 ## Goal
 
@@ -9,43 +9,42 @@ _Last updated: 2026-07-27T16:50:00+08:00_
 ## State snapshot
 
 - **Branch**: main
-- **Commit**: 712c8d1 chore: bump version to 0.1.1
-- **Tag**: v0.1.1（即将 bump 到 v0.1.2）
-- **Uncommitted**:
-  - `scripts/status-line.sh` — 新增 StatusLine 脚本
-  - `src-tauri/src/config_writer.rs` — write_claude_settings: model 加 `claude-` 前缀 + statusLine 嵌入
-  - `claude-proxy-sse-fix.md` / `status-bar-fix-report.md` — 临时文档（不提交）
+- **Commit**: c9f4600 feat: 中转站弹窗改造——四个输入框改为Modal弹窗，页面更清爽
+- **Tag**: v0.1.10
+- **Uncommitted**: none（已全部提交并 push）
 
 ## Context you must load (JIT)
 
 - `src-tauri/src/proxy_manager.rs` — 代理管理核心
 - `src-tauri/src/config_writer.rs` — 配置写入（所有 Agent）
-- `claude-proxy.js` — SSE 流代理脚本（Anthropic→OpenAI 协议转换，已修复 4 bug）
-- `scripts/status-line.sh` — Claude Code 状态栏脚本
+- `src/components/PageRelayKeys.vue` — 中转站 UI（Modal 弹窗模式）
+- `scripts/release.sh` — GitHub Release 发布脚本
+- `windows-vm-build-guide.md` — Windows 虚拟机构建完整 Runbook
 
 ## What works
 
-- ✅ SSE 流代理 4 bug 全修
-- ✅ /v1/models 返回 context_window + max_output_tokens
-- ✅ Claude Code model 字段带 `claude-` 前缀匹配 gateway 模型 ID
-- ✅ CC-Gate 自动部署 statusLine 脚本到 `~/.mimo2codex/status-line.sh`
-- ✅ 所有 Agent 上下文窗口/价格正确写入各自配置文件
-- ✅ 3 代理无条件下启动 + 状态栏实时显示
-- ✅ v0.1.1 Release: Mac DMG + Windows exe + SHA256
+- ✅ Mac DMG (3.9MB) + Windows exe (2.94MB) 双端包 v0.1.10 已上传 GitHub Release
+- ✅ 中转站弹窗改造：四个输入框改为 Modal 弹窗，页面更清爽
+- ✅ 旧版本 Release 资产已清理，标注废弃
+- ✅ `win-vm-build` skill 已固化到 `~/.claude/skills/win-vm-build/`，说"双端构建"即可触发
 
 ## What's broken
 
-- ⚠️ DMG 打包偶尔因旧 app 未退出失败
-- ⚠️ 上面那条 Claude Code context 提示条（`XX% context used`）无法关闭，但 model 名正确
+- ⚠️ `codex-cli` 配置写入后用户称无变化，待排查（未确认是 CC-Gate 问题还是 codex 问题）
+- ⚠️ 镜像站点加载卡顿（确认是网络问题，非 CC-Gate bug）
 
 ## Next actions (ordered)
 
-1. 本次：git 提交 + bump 0.1.2 + push + 双端构建 + Release 上传 + SHA256
-2. 下次：claude-proxy.js 嵌入 Tauri bundle 防被 cc-gate backup 还原
+1. codex-cli 配置写入后生效问题排查（用户报）
+2. 其他用户反馈的问题
+3. 下次改动后：git 提交 + bump + push + 双端构建 + Release + SHA256
 
 ## Beware
 
-- **Windows 构建**：用 Parallels VM，cmd.exe（非 PowerShell），手动 set PATH=cargo;node 路径
+- **Windows 构建**：用 `win-vm-build` skill 或 `windows-vm-build-guide.md` runbook。核心：每次构建用**全新 `cc-gate-build` 目录**（`rmdir /s /q` 清理），否则残留的 Tauri 自动生成 `Cargo.toml` 导致 `include_str!` 路径错误
+- **build 前必须确认 VM 的 `cc-x-llm` 目录无残留 `Cargo.toml`**（Tauri CLI 自动生成在项目根的伪造文件）
+- **`beforeBuildCommand`** 在 Windows 上必须是 `"npm run build"`（不是 pnpm），用 Python UTF-8 patch 后 scp 到 VM，不用 PowerShell 改
+- **分块回传**：exe 用 256KB chunks + Python 二进制拼接，不用 cat（RTK 代理会当 UTF-8 处理）
 - **claude-proxy.js** 三处同步：项目根 + ~/.mimo2codex/ + /tmp/claude-proxy-fixed.js
 - **DeepSeek stream**：必须 disabled thinking
 - **model slug 前缀**：settings.json 用 `claude-` 前缀（匹配 gateway），providers.json 用裸 slug（匹配代理路由）

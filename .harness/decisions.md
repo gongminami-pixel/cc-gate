@@ -112,3 +112,17 @@ _Append-only. Each entry captures the "why" behind a choice._
 **What**: status() 加 try_wait 清理死 Child + port_is_listening() TCP connect 兜底；start() 前 lsof kill 清端口
 **Evidence**: proxy_manager.rs:104-119, 216-260
 **Supersedes**: 旧 HashMap-only 检测（假活）
+
+## 2026-07-28T17:30:00+08:00 — Windows 构建必须用全新目录，否则 Tauri 自动生成 Cargo.toml 污染
+**Why**: Tauri CLI (`tauri.js build`) 在项目根自动生成 Cargo.toml（`path = "src/main.rs"`），后续编译时 `include_str!("../../...")` 从 `src/` 解析成错误路径（项目根父目录）。残留的伪造 Cargo.toml 不删则每次构建都失败
+**What**: 每次 Windows 构建前 `rmdir /s /q` 清旧 build 目录，新建后 tar 解压，确保无残留文件
+**Alternatives**: 改 include_str! 绝对路径、从 src-tauri 目录编译——前者不跨平台，后者 bundler 仍从项目根调 cargo
+**Evidence**: cc-gate-build 目录成功；cc-x-llm 目录因残留 Cargo.toml 反复失败
+**Supersedes**: -
+
+## 2026-07-28T18:00:00+08:00 — 中转站弹窗改为 Modal 模式
+**Why**: 四个输入框内联在页面上视觉混乱，添加/编辑是偶发操作不需要常驻
+**What**: PageRelayKeys.vue 去掉 `.add-relay-box`，改为 Modal overlay（`v-if="showRelayModal"`），四个字段纵向排列，点遮罩关闭
+**Alternatives**: 做成展开/折叠面板——仍然占空间
+**Evidence**: src/components/PageRelayKeys.vue
+**Supersedes**: 旧内联表单布局

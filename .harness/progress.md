@@ -189,3 +189,46 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + 重写 handoff + 追加 progress
 - **outcome**: L2 完整反映 statusLine 嵌入 + model slug 修复
 - **next**: bump 0.1.2 + git 提交 + push + 双端构建 + Release + SHA256
+
+## 2026-07-28T17:00:00+08:00 — work: 中转站弹窗改造
+- **touched**: src/components/PageRelayKeys.vue
+- **action**:
+  - 去掉内联的 `.add-relay-box`，四个输入框改为 Modal 弹窗
+  - 新增 `showRelayModal` 状态控制弹窗显隐
+  - 弹窗内四个字段纵向排列 + 底部 preset 快捷填入 + 取消/保存按钮
+  - 点遮罩层等同于取消
+  - 点"添加中转站"/"编辑"打开弹窗
+  - 页面只剩中转站列表 + API Key 卡片
+- **outcome**: UI 清爽，Mac 构建通过
+- **next**: Windows 构建
+
+## 2026-07-28T17:30:00+08:00 — work: 双端构建 v0.1.10 + GitHub Release 发布
+- **touched**: src-tauri/tauri.conf.json (bump 0.1.9→0.1.10)
+- **action**:
+  - Mac `npx tauri build` 成功 (DMG 3.9MB)
+  - Windows VM 构建：踩坑 Tauri 自动生成伪造 Cargo.toml 导致 `include_str!` 路径解析失败
+    - 根因：`cc-x-llm` 目录残留 Tauri CLI 生成的虚拟 Cargo.toml（`path = "src/main.rs"`）
+    - 解法：按 `windows-vm-build-guide.md` runbook，用全新 `cc-gate-build` 目录 + `rmdir /s /q` 清理
+    - `npm run tauri -- build --bundles nsis` 成功 (exe 2.94MB)
+  - 256KB×12 chunks 回传 + Python 拼接 + SHA256 校验一致
+  - GitHub Release v0.1.10：删除旧版本 9 个资产，上传双端包，更新 SHA256
+  - 旧 Release 标注废弃说明
+- **outcome**: 双端包就绪，GitHub Release 可下载
+- **next**: 同步记忆 + 提交 .harness/
+
+## 2026-07-28T18:00:00+08:00 — work: 固化 win-vm-build skill
+- **touched**: ~/.claude/skills/win-vm-build/SKILL.md
+- **action**:
+  - 创建通用 Windows 虚拟机构建 skill
+  - 包含完整 4 步骤：tar 打包 → scp 传 VM → PowerShell 远程编译 → 256KB chunks 回传 + SHA256
+  - 7 类踩坑全集、增量构建优化、故障排查
+  - 触发词：双端构建、两端构建、三端构建、Windows 构建、虚拟机构建、win build、VM 构建
+  - 放到 `~/.claude/skills/win-vm-build/`，待 cc-switch scan_unmanaged_skills 收编
+- **outcome**: 跨项目通用，下次新项目说"双端构建"即可自动执行
+- **next**: 待 cc-switch 同步后生效
+
+## 2026-07-28T18:40:00+08:00 — handoff_ready: 同步
+- **touched**: .harness/waypoints/2026-07-28T18-40-00+08:00.md .harness/handoff.md .harness/progress.md
+- **action**: 落 waypoint + 重写 handoff + 追加 progress
+- **outcome**: L2 完整反映 v0.1.10 弹窗改造 + 双端构建 + Release 发布 + win-vm-build skill
+- **next**: codex-cli 配置写入问题排查
