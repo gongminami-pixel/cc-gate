@@ -264,12 +264,14 @@ impl ProxyManager {
         );
 
         let mut child = if is_mimo {
-            // mimo2codex: try global binary first, then npx.cmd (Windows) / npx (Unix)
+            // mimo2codex: use our resolved node binary to run the script.
+            // Never run the script directly (#!/usr/bin/env node fails when
+            // the GUI app doesn't inherit the user's shell PATH).
             let global = self.bin_dir.join("mimo2codex");
             #[cfg(windows)] let global = global.with_extension("cmd");
             if global.exists() {
-                let mut c = Command::new(&global);
-                c.args(["--port", &port.to_string()]).kill_on_drop(true);
+                let mut c = Command::new(&self.node_path);
+                c.arg(&global).args(["--port", &port.to_string()]).kill_on_drop(true);
                 crate::win_console::hide_console_async(&mut c);
                 c.spawn().map_err(|e| AppError::Proxy(format!("{name}: {e}")))?
             } else {
