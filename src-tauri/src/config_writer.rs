@@ -356,24 +356,23 @@ pub fn deploy_proxy_scripts() -> Result<()> {
         tracing::info!("Deployed status-line.sh → {}", sl.display());
     }
 
-    // Pre-install mimo2codex in background (fire-and-forget via std::thread)
+    // Install mimo2codex synchronously if missing.
+    // Must block so start_enabled() doesn't race and fail to launch it.
     let mimo_bin = dest.join("mimo2codex");
     #[cfg(windows)] let mimo_bin = mimo_bin.with_extension("cmd");
     if !mimo_bin.exists() {
-        std::thread::spawn(|| {
-            tracing::info!("Background: installing mimo2codex via npm...");
-            let mut c = std::process::Command::new("npm");
-            c.args(["install", "-g", "mimo2codex"]);
-            #[cfg(windows)] {
-                use std::os::windows::process::CommandExt as _;
-                c.creation_flags(0x0800_0000);
-            }
-            match c.output() {
-                Ok(o) if o.status.success() => tracing::info!("mimo2codex installed in background"),
-                Ok(o) => tracing::warn!("mimo2codex install failed: {}", String::from_utf8_lossy(&o.stderr)),
-                Err(e) => tracing::warn!("mimo2codex install error: {e}"),
-            }
-        });
+        tracing::info!("Installing mimo2codex via npm (blocking)...");
+        let mut c = std::process::Command::new("npm");
+        c.args(["install", "-g", "mimo2codex"]);
+        #[cfg(windows)] {
+            use std::os::windows::process::CommandExt as _;
+            c.creation_flags(0x0800_0000);
+        }
+        match c.output() {
+            Ok(o) if o.status.success() => tracing::info!("mimo2codex installed"),
+            Ok(o) => tracing::warn!("mimo2codex install failed: {}", String::from_utf8_lossy(&o.stderr)),
+            Err(e) => tracing::warn!("mimo2codex install error: {e}"),
+        }
     }
 
     Ok(())
