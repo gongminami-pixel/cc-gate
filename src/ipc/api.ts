@@ -20,8 +20,8 @@ export async function getShellInfo(): Promise<ShellInfo> { return invoke<ShellIn
 export async function writeToolConfigs(cfg: AppConfig): Promise<string> { return invoke<string>("write_tool_configs", { cfg }); }
 
 // Relay CRUD
-export async function addRelay(cfg: AppConfig, name: string, url: string, key: string): Promise<AppConfig> { return invoke<AppConfig>("add_relay", { cfg, name, url, key }); }
-export async function updateRelay(cfg: AppConfig, oldName: string, name: string, url: string, key: string): Promise<AppConfig> { return invoke<AppConfig>("update_relay", { cfg, oldName, name, url, key }); }
+export async function addRelay(cfg: AppConfig, name: string, url: string, key: string, anthropicUrl?: string): Promise<AppConfig> { return invoke<AppConfig>("add_relay", { cfg, name, url, key, anthropicUrl }); }
+export async function updateRelay(cfg: AppConfig, oldName: string, name: string, url: string, key: string, anthropicUrl?: string): Promise<AppConfig> { return invoke<AppConfig>("update_relay", { cfg, oldName, name, url, key, anthropicUrl }); }
 export async function deleteRelay(cfg: AppConfig, name: string): Promise<AppConfig> { return invoke<AppConfig>("delete_relay", { cfg, name }); }
 
 // Proxy

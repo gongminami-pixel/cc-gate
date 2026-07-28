@@ -50,9 +50,11 @@ pub fn agent_list() -> Vec<AgentMeta> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelayConfig {
-    pub name: String,       // user-friendly label, e.g. "我的中转"
-    pub url: String,        // base URL, e.g. https://api.relay.com/v1
-    pub key: String,        // API key (saved to .env as RELAY_<name>_API_KEY)
+    pub name: String,           // user-friendly label, e.g. "我的中转"
+    pub url: String,            // OpenAI-compatible base URL, e.g. https://api.relay.com/v1
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anthropic_url: Option<String>,  // Anthropic-native URL (optional), e.g. https://api.relay.com/anthropic
+    pub key: String,            // API key (saved to .env as RELAY_<name>_API_KEY)
 }
 
 // ── App config ──────────────────────────────────────────────

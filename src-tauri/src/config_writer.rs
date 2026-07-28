@@ -126,7 +126,14 @@ pub fn write_providers(cfg: &AppConfig) -> Result<()> {
             if relay.is_none() { continue; }
             let relay = relay.unwrap();
             let env_key = format!("RELAY_{}_API_KEY", sanitize_provider_id(relay_name).to_uppercase());
-            (relay.url.clone(), env_key, format!(" via {}", relay_name))
+            // If relay has an anthropic_url and the provider is anthropic, use that URL
+            // for native protocol passthrough (no translation). Otherwise use the OpenAI URL.
+            let url = if provider_id == "anthropic" {
+                relay.anthropic_url.clone().unwrap_or_else(|| relay.url.clone())
+            } else {
+                relay.url.clone()
+            };
+            (url, env_key, format!(" via {}", relay_name))
         } else {
             continue;
         };
@@ -158,7 +165,11 @@ pub fn write_providers(cfg: &AppConfig) -> Result<()> {
             entry["features"] = serde_json::json!({"forceParallelToolCalls": true});
         }
         // Mark Anthropic-native endpoints so claude-proxy.js does native passthrough
-        if provider_id == "anthropic" && routing == "direct" {
+        let is_anthropic_native = provider_id == "anthropic" && (
+            routing == "direct" ||
+            (routing.starts_with("relay:") && relay_by_name.get(&routing[6..]).and_then(|r| r.anthropic_url.as_ref()).is_some())
+        );
+        if is_anthropic_native {
             entry["anthropicEndpoint"] = serde_json::json!(true);
         }
         entries.push(entry);

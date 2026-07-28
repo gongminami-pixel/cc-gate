@@ -8,6 +8,7 @@ export interface AgentMeta {
 export interface RelayConfig {
   name: string;
   url: string;
+  anthropic_url?: string;
   key: string;
 }
 

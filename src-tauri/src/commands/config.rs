@@ -53,19 +53,19 @@ pub struct ApplyResult { pub success: bool, pub message: String, pub restarted_p
 // ── Relay CRUD ─────────────────────────────────────────────
 
 #[tauri::command]
-pub fn add_relay(mut cfg: AppConfig, name: String, url: String, key: String) -> Result<AppConfig> {
+pub fn add_relay(mut cfg: AppConfig, name: String, url: String, key: String, anthropic_url: Option<String>) -> Result<AppConfig> {
     if cfg.relays.iter().any(|r| r.name == name) {
         return Err(AppError::Config(format!("中转站 '{}' 已存在", name)));
     }
-    cfg.relays.push(RelayConfig { name, url, key });
+    cfg.relays.push(RelayConfig { name, url, anthropic_url, key });
     config_store::save(&cfg)?;
     Ok(cfg)
 }
 
 #[tauri::command]
-pub fn update_relay(mut cfg: AppConfig, old_name: String, name: String, url: String, key: String) -> Result<AppConfig> {
+pub fn update_relay(mut cfg: AppConfig, old_name: String, name: String, url: String, key: String, anthropic_url: Option<String>) -> Result<AppConfig> {
     if let Some(r) = cfg.relays.iter_mut().find(|r| r.name == old_name) {
-        r.name = name; r.url = url; r.key = key;
+        r.name = name; r.url = url; r.anthropic_url = anthropic_url; r.key = key;
     }
     config_store::save(&cfg)?;
     Ok(cfg)

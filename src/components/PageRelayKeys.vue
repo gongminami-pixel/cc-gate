@@ -34,34 +34,35 @@ async function saveApiKeys() {
 }
 
 const relayPresets = [
-  { name: "OpenRouter",   url: "https://openrouter.ai/api/v1" },
-  { name: "Groq",         url: "https://api.groq.com/openai/v1" },
-  { name: "Together AI",  url: "https://api.together.xyz/v1" },
-  { name: "DeepInfra",   url: "https://api.deepinfra.com/v1" },
-  { name: "Cloudflare AI",url: "https://api.cloudflare.com/client/v4/accounts" },
+  { name: "OpenRouter",   url: "https://openrouter.ai/api/v1", anthropicUrl: "" },
+  { name: "Groq",         url: "https://api.groq.com/openai/v1", anthropicUrl: "" },
+  { name: "Together AI",  url: "https://api.together.xyz/v1", anthropicUrl: "" },
+  { name: "DeepInfra",   url: "https://api.deepinfra.com/v1", anthropicUrl: "" },
+  { name: "Cloudflare AI",url: "https://api.cloudflare.com/client/v4/accounts", anthropicUrl: "" },
 ];
 
-const editingRelay = ref<{ oldName: string; name: string; url: string; key: string; masked: boolean }>(
-  { oldName: "", name: "", url: "", key: "", masked: true }
+const editingRelay = ref<{ oldName: string; name: string; url: string; anthropicUrl: string; key: string; masked: boolean }>(
+  { oldName: "", name: "", url: "", anthropicUrl: "", key: "", masked: true }
 );
 const relayBusy = ref(false);
 
-function startNewRelay() { editingRelay.value = { oldName: "", name: "", url: "", key: "", masked: true }; }
-function startEditRelay(r: { name: string; url: string; key: string }) { editingRelay.value = { oldName: r.name, name: r.name, url: r.url, key: r.key, masked: true }; }
-function cancelRelay() { editingRelay.value = { oldName: "", name: "", url: "", key: "", masked: true }; }
-function pickPreset(p: { name: string; url: string }) { editingRelay.value.name = p.name; editingRelay.value.url = p.url; }
+function startNewRelay() { editingRelay.value = { oldName: "", name: "", url: "", anthropicUrl: "", key: "", masked: true }; }
+function startEditRelay(r: { name: string; url: string; anthropic_url?: string; key: string }) { editingRelay.value = { oldName: r.name, name: r.name, url: r.url, anthropicUrl: r.anthropic_url ?? "", key: r.key, masked: true }; }
+function cancelRelay() { editingRelay.value = { oldName: "", name: "", url: "", anthropicUrl: "", key: "", masked: true }; }
+function pickPreset(p: { name: string; url: string; anthropicUrl: string }) { editingRelay.value.name = p.name; editingRelay.value.url = p.url; editingRelay.value.anthropicUrl = p.anthropicUrl; }
 
 async function onSaveRelay() {
   if (!props.config) return;
   const { oldName, name, url, key } = editingRelay.value;
+  const anthropicUrl = editingRelay.value.anthropicUrl.trim();
   if (!name.trim() || !url.trim()) { toast.err("名称和 URL 不能为空"); return; }
   relayBusy.value = true;
   try {
     if (oldName) {
-      await updateRelay(props.config, oldName, name, url, key);
+      await updateRelay(props.config, oldName, name, url, key, anthropicUrl || undefined);
     } else {
       if (props.config.relays.some(r => r.name === name)) { toast.err(`名称「${name}」已存在`); return; }
-      await addRelay(props.config, name, url, key);
+      await addRelay(props.config, name, url, key, anthropicUrl || undefined);
     }
     await refresh();
     toast.ok(`中转站「${name}」已保存`);
@@ -124,7 +125,7 @@ const apiKeyGroups = [
 
         <div v-if="config && config.relays.length > 0" class="relay-list">
           <div v-for="r in config.relays" :key="r.name" class="relay-row">
-            <div class="relay-info"><span class="relay-name">{{ r.name }}</span><span class="relay-url dim">{{ r.url }}</span></div>
+            <div class="relay-info"><span class="relay-name">{{ r.name }}</span><span class="relay-url dim">OpenAI: {{ r.url }}</span><span v-if="r.anthropic_url" class="relay-url dim">Anthropic: {{ r.anthropic_url }}</span></div>
             <div class="relay-actions">
               <button class="btn ghost" @click="startEditRelay(r)">编辑</button>
               <button class="btn ghost" style="color:var(--danger)" @click="onDeleteRelay(r.name)">删除</button>
@@ -141,13 +142,17 @@ const apiKeyGroups = [
           </div>
           <div class="field-row">
             <div class="field"><label>名称</label><input v-model="editingRelay.name" type="text" placeholder="我的中转" style="font-size:14px" /></div>
-            <div class="field" style="flex:2"><label>API URL</label><input v-model="editingRelay.url" type="text" placeholder="https://api.xxx.com/v1" style="font-family:monospace;font-size:14px" /></div>
+            <div class="field" style="flex:2"><label>OpenAI URL <span class="dim" style="font-weight:400">(必填)</span></label><input v-model="editingRelay.url" type="text" placeholder="https://api.xxx.com/v1" style="font-family:monospace;font-size:14px" /></div>
             <div class="field"><label>API Key</label>
               <div class="key-input-wrap">
                 <input :type="editingRelay.masked ? 'password' : 'text'" :placeholder="'sk-…'" :value="editingRelay.key" @input="editingRelay.key = ($event.target as HTMLInputElement).value" @focus="editingRelay.masked = false" @blur="editingRelay.masked = true" style="font-size:14px" />
                 <span v-if="editingRelay.key" class="key-clear" @mousedown.prevent="editingRelay.key = ''">×</span>
               </div>
             </div>
+          </div>
+          <div class="field-row">
+            <div class="field" style="flex:2"><label>Anthropic URL <span class="dim" style="font-weight:400">(选填，Claude Code 原生协议)</span></label><input v-model="editingRelay.anthropicUrl" type="text" placeholder="留空则使用上方 OpenAI URL" style="font-family:monospace;font-size:14px" /></div>
+            <div class="field"><!-- spacer --></div>
           </div>
           <div class="gap8">
             <button class="btn primary" :disabled="relayBusy || !editingRelay.name.trim() || !editingRelay.url.trim()" @click="onSaveRelay">保存</button>
