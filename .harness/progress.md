@@ -232,3 +232,59 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + 重写 handoff + 追加 progress
 - **outcome**: L2 完整反映 v0.1.10 弹窗改造 + 双端构建 + Release 发布 + win-vm-build skill
 - **next**: codex-cli 配置写入问题排查
+
+## 2026-07-28T20:17:29+03:00 — session_open: 读取记忆（新会话 boot，模型 Opus 5）
+- **touched**: .harness/handoff.md .harness/progress.md .harness/decisions.md .harness/waypoints/2026-07-28T18-40-00+08:00.md
+- **action**: L2 加载 handoff + progress 末 90 条 + decisions 末 70 条 + 最新 waypoint；复核 `src/components/PageRelayKeys.vue`、`src-tauri/tauri.conf.json`、git/tag/远端状态
+- **outcome**: 与 handoff 基本一致（Modal 改造在 PageRelayKeys.vue:48-52,143 落地；version 0.1.10；HEAD=41f6267 与 origin/main 同步；/Applications/CC-Gate.app = 0.1.10）。两处轻微漂移已记录：① handoff 写 "Uncommitted: none" 但工作区有 11 个 untracked（临时排查文档 + src-tauri/.xwin-cache/ 构建缓存），均非源码；② handoff 写 "Tag: v0.1.10" 实为**远端** tag，本地只有 v0.1.0（本地 tag 未 fetch）
+- **note**: 本条时间戳偏移为 +03:00（系统本地时区），此前条目为 +08:00；同一时间线，无排序倒置
+- **next**: 等用户确认 goal / next actions；待办首项为 codex-cli 配置写入后不生效排查
+
+## 2026-07-29T--:--:--+08:00 — work: claude-proxy.js 多项修复 + 配置系统加固 + 日志诊断出口
+
+### claude-proxy.js 修复（6 项）
+- **touched**: `claude-proxy.js`
+- **action**:
+  1. **默认端口 8689**（曾为 8789 → Rust 传 `--port 8689` 时才一致，手跑时无声监听错端口）
+  2. **非 ASCII env var 名**：`loadEnv()` 用 `/^(\w+)=/` → ASCII-only 拆分，中文 key（如 `RELAY_非线_API_KEY`）被丢弃。改为 `line.trim()` + `indexOf('=')` 拆分
+  3. **providers.json 新增字段**：`anthropicVersion`（per-provider 版本标头）、`timeoutMs`（per-provider 超时）
+  4. **超时可配**：`TIMEOUT_UNARY`=120s / `TIMEOUT_STREAM`=300s，providers.json `timeoutMs` 覆盖
+  5. **模型解析健壮**：`claude-claude-opus-5` 先查全名再 strip 前缀，避免盲 slice(7) 损坏裸名 → `opus-5`
+  6. **Anthropic 原生直通修复**：只有当 `!provider` 时才走内建直通——providers.json 定义了 relay 的三方 Claude 模型不应该把 key 发给 api.anthropic.com
+  7. **Anthropic passthrough 用 provider.apiKey** 而非客户端 token（客户端发 `proxy` 占位 → upstream 401）
+  8. **错误信息区分**：无路由 → 打印模型名 + 已知模型列表（不再与 token 混淆）
+- **outcome**: 代理路由逻辑大幅健壮，中文 relay 名不再互相覆盖 key
+
+### config_writer.rs 修复（3 项）
+- **touched**: `src-tauri/src/config_writer.rs`
+- **action**:
+  1. **`relay_env_key()` 单一真源**：非 ASCII relay 名稳定转译 `X<hex>` token，中文名不再全塌成 `RELAY__API_KEY`。新增 3 组单测
+  2. **`deploy_proxy_scripts()` 改为 `write_if_changed`**：不再 `if !exists`——以前升级 CC-Gate 后 `.js` 只写一次，永不过期
+  3. **`write_user_api_keys()` 也调用 `relay_env_key()`**：与 `write_providers` 保持一致，`.env` 和 `providers.json` 写同名
+- **outcome**: 跨端 relay 配置一致性保证
+
+### proxy_manager.rs 修复（2 项）
+- **touched**: `src-tauri/src/proxy_manager.rs`
+- **action**:
+  1. **`start_enabled()` 同时写 providers.json + .env**：两个文件不匹配 → proxy 查到的 envKey 在 .env 里不存在 → apiKey 空 → 401
+  2. **代理 stderr → piped**：三个代理的 `Command` 加 `stderr(Stdio::piped())`，日志进 app log
+- **outcome**: 启动时配置完整写入，代理日志可追
+
+### 日志/诊断出口（新增）
+- **touched**: `src-tauri/src/commands/usage.rs` (新增 3 个 Tauri command)、`src-tauri/src/lib.rs` (注册)、`src/components/PageAbout.vue` (UI)、`src/ipc/api.ts` (IPC 接口)
+- **action**:
+  - `get_app_log_tail`：尾部读取今天 app log，用户可在诊断信息页复制发我
+  - `get_app_version`：从 Rust tauri.conf.json 读版本（不靠前端硬编码）
+  - `copy_to_clipboard`：Rust 侧 clipboard write（前端无 ACL 能力）
+  - PageAbout.vue 增加"诊断信息"区：版本号 + 日志尾部 + 一键复制
+- **outcome**: 用户可自助诊断 + 一键复制日志发我，版本号不再漂移。满足全局 CLAUDE.md"bug 先加日志"铁律
+
+### next
+- 本地 commit + push
+- 下次出包：bump version + 双端/三端构建
+
+## 2026-07-29T15:00:00+08:00 — handoff_ready: 同步
+- **touched**: .harness/waypoints/2026-07-29T15-00-00+08:00.md .harness/handoff.md .harness/progress.md
+- **action**: 落 waypoint + 重写 handoff（claude-proxy.js 修复 + 配置系统加固 + 日志诊断出口）
+- **outcome**: L2 完整反映本次会话的代理/配置修复及诊断功能
+- **next**: 本地提交 + push
