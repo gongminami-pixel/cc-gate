@@ -288,3 +288,19 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + 重写 handoff（claude-proxy.js 修复 + 配置系统加固 + 日志诊断出口）
 - **outcome**: L2 完整反映本次会话的代理/配置修复及诊断功能
 - **next**: 本地提交 + push
+
+## 2026-07-29T16:30:00+08:00 — work: 修复 zsh alias 递归展开 bug (codex-*/claude-*/aider-*)
+- **touched**: `src-tauri/src/config_writer.rs` (lines 534, 573, 609)
+- **action**: per-model alias 末尾的命令名加 `\` 防 zsh 递归展开
+  - `codex-*` alias: `codex` → `\codex`
+  - `claude-*` alias: `claude` → `\claude`
+  - `aider-*` alias: `aider` → `\aider`
+- **root cause**: zsh 中 `alias codex-ds='... codex ...'` 的裸 `codex` 被识别为 alias 并展开，导致 `--dangerously-bypass-approvals-and-sandbox` 出现两次
+- **outcome**: `codex-ds` 等不再报 "argument cannot be used multiple times"
+- **reference**: cc-gate-alias-展开bug.md
+
+## 2026-07-29T16:35:00+08:00 — handoff_ready: 同步
+- **touched**: .harness/waypoints/2026-07-29T16-35-00+08:00.md .harness/handoff.md .harness/progress.md
+- **action**: 落 waypoint + 重写 handoff（zsh alias 展开修复 + 双端构建 v0.1.12）
+- **outcome**: L2 完整反映 alias bug 修复
+- **next**: 待用户反馈测试结果
