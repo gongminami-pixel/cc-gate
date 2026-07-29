@@ -4,7 +4,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::path::PathBuf;
-use crate::error::AppError;
 use std::io::Write;
 
 use crate::error::Result;
@@ -79,6 +78,30 @@ fn sanitize_provider_id(raw: &str) -> String {
         .to_lowercase()
 }
 
+/// Env var name for a relay's API key. **Single source of truth** — every writer
+/// (.env, providers.json `envKey`, key pruning) must call this, or the name written
+/// to .env won't match the name providers.json tells the proxy to look up.
+///
+/// Non-ASCII names are transliterated to a stable `X<hex>` token rather than being
+/// filtered out: dropping them collapsed every CJK-named relay onto the same
+/// `RELAY__API_KEY`, so multiple relays silently overwrote each other's key.
+pub fn relay_env_key(relay_name: &str) -> String {
+    let mut out = String::new();
+    for c in relay_name.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_uppercase());
+        } else if c == ' ' || c == '-' || c == '_' {
+            out.push('_');
+        } else {
+            // Stable per-character transliteration keeps distinct names distinct.
+            out.push_str(&format!("X{:X}", c as u32));
+        }
+    }
+    let trimmed = out.trim_matches('_').to_string();
+    let stem = if trimmed.is_empty() { "UNNAMED".to_string() } else { trimmed };
+    format!("RELAY_{stem}_API_KEY")
+}
+
 pub fn write_providers(cfg: &AppConfig) -> Result<()> {
     // Collect enabled model slugs from all agents that write_providers
     let enabled_slugs: BTreeSet<String> = agent_list().iter()
@@ -125,7 +148,7 @@ pub fn write_providers(cfg: &AppConfig) -> Result<()> {
             let relay = relay_by_name.get(relay_name);
             if relay.is_none() { continue; }
             let relay = relay.unwrap();
-            let env_key = format!("RELAY_{}_API_KEY", sanitize_provider_id(relay_name).to_uppercase());
+            let env_key = relay_env_key(relay_name);
             // If relay has an anthropic_url and the provider is anthropic, use that URL
             // for native protocol passthrough (no translation). Otherwise use the OpenAI URL.
             let url = if provider_id == "anthropic" {
@@ -192,7 +215,7 @@ pub fn write_env_relay_keys(cfg: &AppConfig) -> Result<()> {
 
     // Append relay keys
     for relay in &cfg.relays {
-        let env_key = format!("RELAY_{}_API_KEY", relay.name.to_uppercase().replace(' ', "_").replace('-', "_"));
+        let env_key = relay_env_key(&relay.name);
         lines.push(format!("{env_key}={}", relay.key));
     }
 
@@ -326,35 +349,25 @@ pub fn write_claude_settings(cfg: &AppConfig) -> Result<()> {
 /// Copy built-in proxy scripts to ~/.mimo2codex/ so the proxy manager can launch them.
 /// Scripts are embedded at compile time via `include_str!` — no runtime file dependency.
 ///
-/// `write_if_changed` is not used here because we WANT to overwrite on every apply
-/// to ensure the scripts are always up-to-date with the shipped CC-Gate version.
+/// Uses `write_if_changed`: the shipped script is the source of truth, so an upgraded
+/// CC-Gate always refreshes a stale runtime copy, while an already-current file costs
+/// no disk write. The previous `if !exists` guard meant users who had ever launched an
+/// older build kept its buggy proxy forever — fixes shipped in the binary never landed.
+///
+/// Note: this overwrites hand-patched copies of ~/.mimo2codex/*.js. Patch the repo-root
+/// script and rebuild instead of editing the deployed copy.
 pub fn deploy_proxy_scripts() -> Result<()> {
     let dest = paths::mimo2codex_dir();
     fs::create_dir_all(&dest)?;
 
-    // claude-proxy.js — only write if missing (avoid disk I/O on every launch)
-    let cp = dest.join("claude-proxy.js");
-    if !cp.exists() {
-        fs::write(&cp, include_str!("../../claude-proxy.js"))
-            .map_err(|e| AppError::Io(e))?;
-        tracing::info!("Deployed claude-proxy.js → {}", cp.display());
-    }
+    // claude-proxy.js — refresh when the shipped content differs
+    write_if_changed(&dest.join("claude-proxy.js"), include_str!("../../claude-proxy.js"))?;
 
     // chat-proxy.js
-    let chat = dest.join("chat-proxy.js");
-    if !chat.exists() {
-        fs::write(&chat, include_str!("../../chat-proxy.js"))
-            .map_err(|e| AppError::Io(e))?;
-        tracing::info!("Deployed chat-proxy.js → {}", chat.display());
-    }
+    write_if_changed(&dest.join("chat-proxy.js"), include_str!("../../chat-proxy.js"))?;
 
     // status-line.sh
-    let sl = dest.join("status-line.sh");
-    if !sl.exists() {
-        fs::write(&sl, include_str!("../../scripts/status-line.sh"))
-            .map_err(|e| AppError::Io(e))?;
-        tracing::info!("Deployed status-line.sh → {}", sl.display());
-    }
+    write_if_changed(&dest.join("status-line.sh"), include_str!("../../scripts/status-line.sh"))?;
 
     // Install mimo2codex synchronously if missing.
     // Must block so start_enabled() doesn't race and fail to launch it.
@@ -632,7 +645,7 @@ pub fn write_user_api_keys(cfg: &AppConfig) -> Result<()> {
     // Collect env var names that this function manages (user-entered keys + relay keys)
     let managed_keys: HashSet<&str> = cfg.api_keys.keys().map(|s| s.as_str()).collect();
     let _relay_keys: HashSet<String> = cfg.relays.iter()
-        .map(|r| format!("RELAY_{}_API_KEY", r.name.to_uppercase().replace(' ', "_").replace('-', "_")))
+        .map(|r| relay_env_key(&r.name))
         .collect();
 
     // Keep lines whose env var is NOT in managed_keys and NOT a RELAY_ key
@@ -665,7 +678,7 @@ pub fn write_user_api_keys(cfg: &AppConfig) -> Result<()> {
 
     // Append relay keys
     for relay in &cfg.relays {
-        let env_key = format!("RELAY_{}_API_KEY", relay.name.to_uppercase().replace(' ', "_").replace('-', "_"));
+        let env_key = relay_env_key(&relay.name);
         preserved.push(format!("{env_key}={}", relay.key));
     }
 
@@ -880,4 +893,37 @@ fn short(slug: &str) -> &str { match slug {
 fn codex_alias(s: &str) -> String { format!("codex-{}", short(s)) }
 fn claude_alias(s: &str) -> String { format!("claude-{}", short(s)) }
 fn aider_alias(s: &str) -> String { format!("aider-{}", short(s)) }
+
+#[cfg(test)]
+mod tests {
+    use super::relay_env_key;
+
+    #[test]
+    fn ascii_names_keep_their_shape() {
+        assert_eq!(relay_env_key("NL"), "RELAY_NL_API_KEY");
+        assert_eq!(relay_env_key("my relay"), "RELAY_MY_RELAY_API_KEY");
+        assert_eq!(relay_env_key("open-router"), "RELAY_OPEN_ROUTER_API_KEY");
+    }
+
+    #[test]
+    fn non_ascii_names_stay_distinct() {
+        // Previously sanitize_provider_id() stripped these to "", collapsing every
+        // CJK-named relay onto RELAY__API_KEY so they overwrote each other's key.
+        let a = relay_env_key("非线");
+        let b = relay_env_key("智谱");
+        assert_ne!(a, b, "distinct names must not collide");
+        for k in [&a, &b] {
+            assert!(k.starts_with("RELAY_") && k.ends_with("_API_KEY"));
+            assert!(k.is_ascii(), "{k} must be ASCII — the proxy reads it from .env");
+        }
+    }
+
+    #[test]
+    fn mixed_and_degenerate_names() {
+        assert_eq!(relay_env_key("非线-1"), "RELAY_X975EX7EBF_1_API_KEY");
+        // A name with nothing usable must still yield a valid, stable var name.
+        assert_eq!(relay_env_key("-"), "RELAY_UNNAMED_API_KEY");
+        assert_eq!(relay_env_key(""), "RELAY_UNNAMED_API_KEY");
+    }
+}
 

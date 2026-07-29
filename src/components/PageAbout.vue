@@ -1,11 +1,38 @@
 <script setup lang="ts">
+import { ref, onMounted } from "vue";
+import { getAppLogTail, getAppVersion, copyToClipboard } from "../ipc/api";
+
+// Read the real version from the bundle instead of hardcoding it — a stale
+// literal here is what makes "did my fix ship?" unanswerable.
+const version = ref("…");
+onMounted(async () => {
+  try { version.value = await getAppVersion(); } catch { version.value = "unknown"; }
+});
+
+const diag = ref("");
+const loading = ref(false);
+const copied = ref(false);
+
+async function loadDiag() {
+  loading.value = true;
+  try { diag.value = await getAppLogTail(200); }
+  catch (e) { diag.value = `读取失败: ${e}`; }
+  finally { loading.value = false; }
+}
+
+async function copyDiag() {
+  if (!diag.value) return;
+  await copyToClipboard(diag.value);
+  copied.value = true;
+  setTimeout(() => (copied.value = false), 1500);
+}
 </script>
 
 <template>
   <section class="page">
     <header class="page-header">
       <h2>关于 CC-Gate</h2>
-      <span class="badge on">v0.1.0</span>
+      <span class="badge on">v{{ version }}</span>
     </header>
 
     <div class="about-content">
@@ -92,6 +119,20 @@
         <p>CC-Gate 替代原 CC Switch，统一管理多模型 AI 工具的配置分发。</p>
         <p class="dim" style="margin-top:8px">端口：mimo2codex :8688 · claude-proxy :8689 · chat-proxy :8690</p>
       </div>
+
+      <div class="diag">
+        <div class="diag-head">
+          <div>
+            <div class="diag-title">诊断信息</div>
+            <div class="diag-hint">代理路由日志（模型走了哪个 provider、上游报什么错）。报问题时请复制这段发给开发者。</div>
+          </div>
+          <div class="diag-btns">
+            <button class="btn" @click="loadDiag" :disabled="loading">{{ loading ? "读取中…" : "读取日志" }}</button>
+            <button class="btn" @click="copyDiag" :disabled="!diag">{{ copied ? "已复制" : "复制" }}</button>
+          </div>
+        </div>
+        <pre v-if="diag" class="diag-body">{{ diag }}</pre>
+      </div>
     </div>
   </section>
 </template>
@@ -110,4 +151,16 @@
 .feature-detail { font-size: 12px; color: var(--fg-dim); line-height: 1.5; }
 
 .about-footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--fg-muted); }
+
+.diag { margin-top: 20px; padding: 16px; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--border); }
+.diag-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.diag-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.diag-hint { font-size: 12px; color: var(--fg-dim); line-height: 1.5; }
+.diag-btns { display: flex; gap: 8px; flex-shrink: 0; }
+.diag-body {
+  margin: 12px 0 0; padding: 10px; max-height: 280px; overflow: auto;
+  font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+}
 </style>

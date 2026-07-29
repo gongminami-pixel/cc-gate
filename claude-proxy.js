@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // claude-proxy.js — Anthropic Messages API → OpenAI Chat Completions
-// Usage: node claude-proxy.js [--port 8789]
+// Usage: node claude-proxy.js [--port 8689]
 // Auto-discovers providers from ~/.mimo2codex/.env + providers.json
+//
+// cc-gate-script-version: 2
 
 const http = require('http');
 const https = require('https');
@@ -9,18 +11,25 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const PORT = parseInt(process.argv[process.argv.indexOf('--port') + 1]) || 8789;
+// Default must match proxy_manager.rs, which always passes --port 8689 explicitly.
+// A mismatched default silently listens on the wrong port when run by hand.
+const PORT = parseInt(process.argv[process.argv.indexOf('--port') + 1]) || 8689;
 const HOME = os.homedir();
 const ENV_FILE = path.join(HOME, '.mimo2codex', '.env');
 const PROVIDERS_FILE = path.join(HOME, '.mimo2codex', 'providers.json');
 
 // ── Load API keys from .env ──────────────────────────────────
+// Split on the first '=' instead of matching /^(\w+)=/ — \w is ASCII-only, so
+// non-ASCII key names (e.g. RELAY_非线_API_KEY) were silently dropped.
 function loadEnv() {
   const env = {};
   if (fs.existsSync(ENV_FILE)) {
     fs.readFileSync(ENV_FILE, 'utf8').split('\n').forEach(line => {
-      const m = line.match(/^(\w+)=(.+)$/);
-      if (m) env[m[1]] = m[2].trim();
+      const t = line.trim();
+      if (!t || t.startsWith('#')) return;
+      const eq = t.indexOf('=');
+      if (eq <= 0) return;
+      env[t.slice(0, eq)] = t.slice(eq + 1).trim();
     });
   }
   return env;
@@ -42,6 +51,8 @@ function loadProviders(env) {
           maxOutputTokens: m.maxOutputTokens || 16384,
           anthropicEndpoint: p.anthropicEndpoint || false,
           anthropicModel: p.anthropicModel || null,
+          anthropicVersion: p.anthropicVersion || null,   // per-provider override
+          timeoutMs: p.timeoutMs || null,                 // per-provider override
         };
       }
     }
@@ -75,6 +86,10 @@ const PROVIDERS = loadProviders(env);
 
 console.error(`Loaded ${Object.keys(PROVIDERS).length} providers: ${Object.keys(PROVIDERS).join(', ')}`);
 
+// Request timeouts. Callers may override per-provider via opts.timeout (providers.json timeoutMs).
+const TIMEOUT_UNARY = 120000;   // non-streaming request
+const TIMEOUT_STREAM = 300000;  // streaming request — first byte may lag on slow relays
+
 // ── HTTP request helper ──────────────────────────────────────
 function httpRequest(url, opts, body) {
   return new Promise((resolve, reject) => {
@@ -83,7 +98,7 @@ function httpRequest(url, opts, body) {
     const req = mod.request(u, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...opts.headers },
-      timeout: 120000,
+      timeout: opts.timeout || TIMEOUT_UNARY,
     }, res => {
       let data = '';
       res.on('data', c => data += c);
@@ -107,7 +122,7 @@ function streamPassthrough(url, opts, body, clientRes) {
     const upstreamReq = mod.request(u, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...opts.headers },
-      timeout: 300000,
+      timeout: opts.timeout || TIMEOUT_STREAM,
     }, upstreamRes => {
       if (upstreamRes.statusCode !== 200) {
         let data = '';
@@ -164,7 +179,7 @@ function openaiStreamToAnthropicSSE(url, opts, body, clientRes, modelId) {
     const upstreamReq = mod.request(u, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...opts.headers },
-      timeout: 300000,
+      timeout: opts.timeout || TIMEOUT_STREAM,
     }, upstreamRes => {
       if (upstreamRes.statusCode !== 200) {
         let data = '';
@@ -607,29 +622,44 @@ const server = http.createServer(async (req, res) => {
     try { anthropicReq = JSON.parse(body); }
     catch { res.writeHead(400); res.end(JSON.stringify(errorResponse(400, 'Invalid JSON'))); return; }
 
-    const modelId = anthropicReq.model;
-    // Strip claude- prefix (added by gateway model discovery)
-    const realModelId = modelId.startsWith('claude-') ? modelId.slice(7) : modelId;
+    const modelId = anthropicReq.model || '';
 
-    // ── Anthropic-native passthrough (built-in) ──
+    // ── Resolve the requested model name ──
+    // Gateway discovery prefixes every model with "claude-" (see handleModels), so
+    // "deepseek-v4-pro" arrives as "claude-deepseek-v4-pro". But a provider model
+    // literally named "claude-opus-5" arrives as "claude-claude-opus-5" via discovery
+    // and as plain "claude-opus-5" when discovery is bypassed. Match the name as-is
+    // first so a blind slice(7) can't mangle it into "opus-5".
+    let realModelId = modelId;
+    if (!PROVIDERS[realModelId] && modelId.startsWith('claude-')) {
+      realModelId = modelId.slice(7);
+    }
+
+    // ── Resolve provider: providers.json first, token shorthand only as fallback ──
+    // Token routing (x-api-key: ds|qwen|glm|mimo) is a legacy shorthand. It must not
+    // outrank an explicitly requested model, or the model field is silently ignored.
+    const resolvedModel = PROVIDERS[realModelId] ? realModelId : (TOKEN_MAP[token] || realModelId);
+    const provider = PROVIDERS[resolvedModel];
+
+    // ── Anthropic-native passthrough (built-in) — only when providers.json has no route ──
     // Claude's own models go directly to api.anthropic.com with the client's OAuth token.
-    // Check against both raw modelId (may have claude- prefix from gateway) and stripped realModelId.
-    const ANTHROPIC_MODELS = ['claude-opus-5', 'claude-opus-4-5', 'claude-sonnet-5', 'claude-haiku-4-5'];
-    const isAnthropicNative = ANTHROPIC_MODELS.includes(modelId) || ANTHROPIC_MODELS.includes(realModelId) ||
-      realModelId.startsWith('claude-opus-') || realModelId.startsWith('claude-sonnet-') || realModelId.startsWith('claude-haiku-');
+    // Gated on !provider: any provider (incl. a third-party relay) that configures a
+    // claude-* model must win over this built-in, or its key is sent to Anthropic → 401.
+    const isAnthropicNative = !provider && /^claude-(opus|sonnet|haiku|fable)-/.test(realModelId);
     if (isAnthropicNative) {
       const clientKey = authHeader || 'no-key';
+      const nativeHeaders = { 'x-api-key': clientKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' };
       console.error(`→ ${realModelId} → Anthropic passthrough (https://api.anthropic.com)${anthropicReq.stream ? ' [stream]' : ''}`);
       const reqBody = { ...anthropicReq };
       reqBody.model = realModelId;
       try {
         if (anthropicReq.stream) {
           await streamPassthrough('https://api.anthropic.com/v1/messages', {
-            headers: { 'x-api-key': clientKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+            headers: nativeHeaders
           }, reqBody, res);
         } else {
           const result = await httpRequest('https://api.anthropic.com/v1/messages', {
-            headers: { 'x-api-key': clientKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+            headers: nativeHeaders
           }, reqBody);
           if (result.status === 200) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -651,14 +681,15 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Resolve provider via token → model id → provider lookup
-    const resolvedModel = TOKEN_MAP[token] || realModelId;
-    const provider = PROVIDERS[resolvedModel];
-
     if (!provider) {
-      console.error(`Unknown token: ${token}, model: ${modelId}`);
+      // Distinguish "no route for this model" from "bad token shorthand" — conflating
+      // them sent past debugging sessions chasing keys when the model name was at fault.
+      const known = Object.keys(PROVIDERS).join(', ') || '(none)';
+      const msg = `No provider configured for model "${modelId}" (resolved: "${resolvedModel}"). `
+        + `Known models: ${known}. Token shorthands: ${Object.keys(TOKEN_MAP).join(', ')}.`;
+      console.error(msg);
       res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(errorResponse(400, `Unknown token: ${token}. Use: ${Object.keys(TOKEN_MAP).join(', ')}`)));
+      res.end(JSON.stringify(errorResponse(400, msg)));
       return;
     }
 
@@ -671,17 +702,24 @@ const server = http.createServer(async (req, res) => {
 
     if (provider.anthropicEndpoint) {
       // ── Anthropic passthrough (provider speaks Anthropic natively) ──
+      // Use provider.apiKey (from providers.json envKey), not the client's token —
+      // the client sends a placeholder like "proxy", which upstream rejects with 401.
+      const upstreamHeaders = {
+        'x-api-key': provider.apiKey || authHeader || 'no-key',
+        'anthropic-version': provider.anthropicVersion || '2023-06-01',
+        'Content-Type': 'application/json',
+      };
       console.error(`→ ${modelId} → ${provider.displayName} (passthrough: ${provider.baseUrl})${anthropicReq.stream ? ' [stream]' : ''}`);
       const reqBody = { ...anthropicReq };
       reqBody.model = provider.anthropicModel || provider.defaultModel || modelId;
       try {
         if (anthropicReq.stream) {
           await streamPassthrough(provider.baseUrl + '/v1/messages', {
-            headers: { 'x-api-key': authHeader || 'no-key', 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+            headers: upstreamHeaders, timeout: provider.timeoutMs
           }, reqBody, res);
         } else {
           const result = await httpRequest(provider.baseUrl + '/v1/messages', {
-            headers: { 'x-api-key': authHeader || 'no-key', 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+            headers: upstreamHeaders, timeout: provider.timeoutMs
           }, reqBody);
           if (result.status === 200) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -713,11 +751,11 @@ const server = http.createServer(async (req, res) => {
           // instead of delta.tool_calls, breaking Claude Code's tool parsing.
           openaiReq.thinking = { type: 'disabled' };
           await openaiStreamToAnthropicSSE(upstreamUrl, {
-            headers: { 'Authorization': `Bearer ${provider.apiKey}` }
+            headers: { 'Authorization': `Bearer ${provider.apiKey}` }, timeout: provider.timeoutMs
           }, openaiReq, res, modelId);
         } else {
           const result = await httpRequest(upstreamUrl, {
-            headers: { 'Authorization': `Bearer ${provider.apiKey}` }
+            headers: { 'Authorization': `Bearer ${provider.apiKey}` }, timeout: provider.timeoutMs
           }, openaiReq);
           if (result.status === 200) {
             const anthropicResp = openAIToAnthropic(result.body, modelId);

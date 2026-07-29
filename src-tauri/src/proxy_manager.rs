@@ -202,10 +202,16 @@ impl ProxyManager {
     /// For mimo2codex, rewrites providers.json before each retry to self-heal.
     /// Does NOT kill existing proxies — if port is already listening, skip.
     pub async fn start_enabled(&self) -> Result<()> {
-        // Write providers.json before starting mimo2codex
+        // Write providers.json + .env before starting the proxies.
+        // Both must be rewritten together: providers.json names the env var holding
+        // each relay key, so refreshing one alone leaves the proxy looking up a key
+        // name that .env doesn't define (empty apiKey → upstream 401).
         if let Ok(cfg) = config_store::load() {
             if let Err(e) = config_writer::write_providers(&cfg) {
                 tracing::warn!("write_providers before proxy start failed: {e}");
+            }
+            if let Err(e) = config_writer::write_user_api_keys(&cfg) {
+                tracing::warn!("write_user_api_keys before proxy start failed: {e}");
             }
         }
 
@@ -272,6 +278,7 @@ impl ProxyManager {
             if global.exists() {
                 let mut c = Command::new(&self.node_path);
                 c.arg(&global).args(["--port", &port.to_string()]).kill_on_drop(true);
+                c.stderr(std::process::Stdio::piped());
                 crate::win_console::hide_console_async(&mut c);
                 c.spawn().map_err(|e| AppError::Proxy(format!("{name}: {e}")))?
             } else {
@@ -279,6 +286,7 @@ impl ProxyManager {
                 #[cfg(not(windows))] let npx = "npx";
                 let mut c = Command::new(npx);
                 c.args(["-y", "mimo2codex", "--port", &port.to_string()]).kill_on_drop(true);
+                c.stderr(std::process::Stdio::piped());
                 crate::win_console::hide_console_async(&mut c);
                 c.spawn().map_err(|e| AppError::Proxy(format!("{name}: {e}")))?
             }
@@ -286,9 +294,24 @@ impl ProxyManager {
             // claude-proxy / chat-proxy: node <script> --port <port>
             let mut c = Command::new(&self.node_path);
             c.arg(script).args(["--port", &port.to_string()]).kill_on_drop(true);
+            c.stderr(std::process::Stdio::piped());
             crate::win_console::hide_console_async(&mut c);
             c.spawn().map_err(|e| AppError::Proxy(format!("{name}: {e}")))?
         };
+
+        // Forward the proxy's stderr into the app log. Without this the proxies'
+        // routing diagnostics ("→ model → provider", upstream error bodies) go
+        // nowhere the user can reach, so a misroute can only be guessed at.
+        if let Some(err) = child.stderr.take() {
+            let tag = name.to_string();
+            tokio::spawn(async move {
+                use tokio::io::{AsyncBufReadExt as _, BufReader};
+                let mut lines = BufReader::new(err).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    tracing::info!(target: "proxy", "[{tag}] {line}");
+                }
+            });
+        }
 
         let pid = child.id();
         tokio::time::sleep(Duration::from_millis(500)).await;

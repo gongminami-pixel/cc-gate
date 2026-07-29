@@ -41,6 +41,9 @@ export async function getDailyUsage(days: number): Promise<DailyUsage[]> { retur
 export async function getRecentLogs(limit: number): Promise<LogEntry[]> { return invoke<LogEntry[]>("get_recent_logs", { limit }); }
 export async function getPerModelUsage(): Promise<PerModelUsage[]> { return invoke<PerModelUsage[]>("get_per_model_usage"); }
 export async function importUsageData(): Promise<number> { return invoke<number>("import_usage_data"); }
+export async function getAppLogTail(lines: number): Promise<string> { return invoke<string>("get_app_log_tail", { lines }); }
+export async function getAppVersion(): Promise<string> { return invoke<string>("get_app_version"); }
+export async function copyToClipboard(text: string): Promise<void> { return invoke<void>("copy_to_clipboard", { text }); }
 
 // Tool check
 export async function checkTools(force?: boolean): Promise<ToolStatus[]> { return invoke<ToolStatus[]>("check_tools", { force: force ?? false }); }
