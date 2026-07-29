@@ -531,7 +531,7 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
                     ));
                 } else {
                     out.push_str(&format!(
-                        "alias {}='CC_GATE_MODEL=\"{}\" OPENAI_API_KEY=proxy codex --dangerously-bypass-approvals-and-sandbox -c model_provider=\"custom\" -c model=\"{}\" -c base_url=\"http://127.0.0.1:{port}/v1\" -c model_context_window={} -c model_max_output_tokens={} -c requires_openai_auth=\"false\"'\n",
+                        "alias {}='CC_GATE_MODEL=\"{}\" OPENAI_API_KEY=proxy \\codex --dangerously-bypass-approvals-and-sandbox -c model_provider=\"custom\" -c model=\"{}\" -c base_url=\"http://127.0.0.1:{port}/v1\" -c model_context_window={} -c model_max_output_tokens={} -c requires_openai_auth=\"false\"'\n",
                         aname, slug, m.slug, m.context_window, m.max_output_tokens
                     ));
                 }
@@ -570,7 +570,7 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
                 ));
             } else {
                 out.push_str(&format!(
-                    "alias {aname}='CC_GATE_MODEL=\"{slug}\" \\\n  ANTHROPIC_BASE_URL=\"http://127.0.0.1:{port}\" \\\n  ANTHROPIC_AUTH_TOKEN=proxy \\\n  ANTHROPIC_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_FABLE_MODEL=\"{cm}\" \\\n  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \\\n  claude --dangerously-skip-permissions'\n",
+                    "alias {aname}='CC_GATE_MODEL=\"{slug}\" \\\n  ANTHROPIC_BASE_URL=\"http://127.0.0.1:{port}\" \\\n  ANTHROPIC_AUTH_TOKEN=proxy \\\n  ANTHROPIC_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_FABLE_MODEL=\"{cm}\" \\\n  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \\\n  \\claude --dangerously-skip-permissions'\n",
                     aname=aname, slug=slug, port=port, cm=cm,
                 ));
             }
@@ -606,7 +606,7 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
                 ));
             } else {
                 out.push_str(&format!(
-                    "alias {}='CC_GATE_MODEL=\"{}\" OPENAI_API_BASE=http://127.0.0.1:{}/v1 OPENAI_API_KEY=proxy aider --model openai/{}'\n",
+                    "alias {}='CC_GATE_MODEL=\"{}\" OPENAI_API_BASE=http://127.0.0.1:{}/v1 OPENAI_API_KEY=proxy \\aider --model openai/{}'\n",
                     aname, slug, port, slug
                 ));
             }
