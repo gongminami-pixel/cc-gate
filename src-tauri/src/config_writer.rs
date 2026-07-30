@@ -190,7 +190,7 @@ pub fn write_providers(cfg: &AppConfig) -> Result<()> {
         // Mark Anthropic-native endpoints so claude-proxy.js does native passthrough
         let is_anthropic_native = provider_id == "anthropic" && (
             routing == "direct" ||
-            (routing.starts_with("relay:") && relay_by_name.get(&routing[6..]).and_then(|r| r.anthropic_url.as_ref()).is_some())
+            routing.starts_with("relay:")
         );
         if is_anthropic_native {
             entry["anthropicEndpoint"] = serde_json::json!(true);
@@ -319,7 +319,7 @@ pub fn write_claude_settings(cfg: &AppConfig) -> Result<()> {
     );
 
     // Default model: first assigned (BTreeSet iterates sorted for stability), fallback to deepseek
-    let default_model = claude_slugs.iter().next()
+    let _default_model = claude_slugs.iter().next()
         .map(|s| if s.starts_with("claude-") { s.clone() } else { format!("claude-{}", s) })
         .unwrap_or_else(|| "claude-deepseek-v4-pro".into());
 
@@ -334,7 +334,9 @@ pub fn write_claude_settings(cfg: &AppConfig) -> Result<()> {
 
     let settings = serde_json::json!({
         "env": {"ANTHROPIC_BASE_URL": base_url},
-        "model": default_model,
+        // Do NOT set "model" to a full model name — the "model" key selects the tier
+        // (opus/sonnet/haiku), and all four tier env vars are already set by shell aliases.
+        // Writing a non-tier value like "claude-deepseek-v4-pro" would confuse Claude Code.
         "effortLevel": "xhigh",
         "statusLine": {
             "type": "command",
@@ -542,21 +544,23 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
     // ── Claude CLI ──────────────────────────────────────────
     let claude_slugs = cfg.agent_models.get("claude_cli").cloned().unwrap_or_default();
     if !claude_slugs.is_empty() {
-        // Native alias: "claude" (uses first assigned model)
-        if let Some(slug) = claude_slugs.first() {
-            let cm = format!("claude-{}", slug);
-            let port = cfg.proxy_ports.claude_proxy;
-            if powershell {
-                out.push_str(&format!(
-                    "function claude {{ $env:CC_GATE_MODEL='{slug}'; $env:ANTHROPIC_BASE_URL='http://127.0.0.1:{port}'; $env:ANTHROPIC_AUTH_TOKEN='proxy'; $env:ANTHROPIC_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_OPUS_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_SONNET_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_FABLE_MODEL='{cm}'; $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY='1'; claude --dangerously-skip-permissions }}\n",
-                    slug=slug, port=port, cm=cm,
-                ));
-            } else {
-                out.push_str(&format!(
-                    "alias claude='CC_GATE_MODEL=\"{slug}\" \\\n  ANTHROPIC_BASE_URL=\"http://127.0.0.1:{port}\" \\\n  ANTHROPIC_AUTH_TOKEN=proxy \\\n  ANTHROPIC_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_FABLE_MODEL=\"{cm}\" \\\n  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \\\n  claude --dangerously-skip-permissions'\n",
-                    slug=slug, port=port, cm=cm,
-                ));
-            }
+        // Native alias: "claude" — prefer claude-opus-* models, fall back to first
+        let slug = claude_slugs.iter()
+            .find(|s| s.starts_with("claude-opus-"))
+            .or_else(|| claude_slugs.first())
+            .unwrap();
+        let cm = format!("claude-{}", slug);
+        let port = cfg.proxy_ports.claude_proxy;
+        if powershell {
+            out.push_str(&format!(
+                "function claude {{ $env:CC_GATE_MODEL='{slug}'; $env:ANTHROPIC_BASE_URL='http://127.0.0.1:{port}'; $env:ANTHROPIC_AUTH_TOKEN='proxy'; $env:ANTHROPIC_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_OPUS_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_SONNET_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_FABLE_MODEL='{cm}'; $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY='1'; claude --dangerously-skip-permissions }}\\n",
+                slug=slug, port=port, cm=cm,
+            ));
+        } else {
+            out.push_str(&format!(
+                "alias claude='CC_GATE_MODEL=\"{slug}\" \\\n  ANTHROPIC_BASE_URL=\"http://127.0.0.1:{port}\" \\\n  ANTHROPIC_AUTH_TOKEN=proxy \\\n  ANTHROPIC_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_FABLE_MODEL=\"{cm}\" \\\n  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \\\n  claude --dangerously-skip-permissions'\n",
+                slug=slug, port=port, cm=cm,
+            ));
         }
         // Per-model aliases: claude-{short}
         for slug in &claude_slugs {

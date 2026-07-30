@@ -15,7 +15,16 @@ pub fn mimo2codex_dir() -> PathBuf {
 }
 
 pub fn logs_dir() -> Result<PathBuf> {
+    #[cfg(target_os = "macos")]
     let d = home().join("Library/Logs/CC-Gate");
+    #[cfg(target_os = "windows")]
+    let d = {
+        let appdata = std::env::var("LOCALAPPDATA").map(PathBuf::from)
+            .unwrap_or_else(|_| home().join("AppData").join("Local"));
+        appdata.join("CC-Gate").join("logs")
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let d = home().join(".local/share/CC-Gate/logs");
     std::fs::create_dir_all(&d)?;
     Ok(d)
 }
