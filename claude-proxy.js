@@ -749,7 +749,10 @@ const server = http.createServer(async (req, res) => {
           openaiReq.stream = true;
           // DeepSeek V4 with thinking enabled puts tool_calls in reasoning_content
           // instead of delta.tool_calls, breaking Claude Code's tool parsing.
-          openaiReq.thinking = { type: 'disabled' };
+          // Qwen 3.8 requires enable_thinking=true; other models are fine without.
+          if (resolvedModel.startsWith('deepseek')) {
+            openaiReq.thinking = { type: 'disabled' };
+          }
           await openaiStreamToAnthropicSSE(upstreamUrl, {
             headers: { 'Authorization': `Bearer ${provider.apiKey}` }, timeout: provider.timeoutMs
           }, openaiReq, res, modelId);
