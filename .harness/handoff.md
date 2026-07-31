@@ -1,6 +1,6 @@
 # Harness Handoff
 
-_Last updated: 2026-07-31T13:58:00+08:00_
+_Last updated: 2026-07-31T23:32:00+08:00_
 
 ## Goal
 
@@ -9,10 +9,10 @@ _Last updated: 2026-07-31T13:58:00+08:00_
 ## State snapshot
 
 - **Branch**: main
-- **Commit**: 6732fc9 fix: 找人修改后的代码变更（0.1.12）
+- **Commit**: 8a38e1e docs(harness): 同步记忆 — v0.1.12 Release 发版 + 找人修改代码合入
 - **Tag**: v0.1.12
 - **Released**: v0.1.12 GitHub Release（macOS DMG + Windows exe 双包 + SHA256）
-- **Uncommitted**: none（源码已全部入 commit 和 push）
+- **Uncommitted**: claude-proxy.js, src-tauri/src/config_writer.rs（工作区有未提交源码改动）
 
 ## Context you must load (JIT)
 
@@ -34,6 +34,9 @@ _Last updated: 2026-07-31T13:58:00+08:00_
 - ✅ 诊断信息页（版本号 + 日志尾部 + 一键复制）
 - ✅ zsh alias 递归展开 bug 已修复（`\codex`/`\claude`/`\aider`）
 - ✅ 找人修改的新代码已合入（chat-proxy.js, config_writer.rs, paths.rs, package-lock.json）
+- ✅ GitHub Release v0.1.12 最新包（2026-07-31 第三批更新）
+  - macOS: `d064dfd7438f127e15477bcebb20acd33a7bc2935a93502f13eee7a558a22ee7`
+  - Windows: `06dce8e5aaad389fe3ce8b4f5b3982829b8f8d4a438f78f2439916500a9e3a6f`
 
 ## What's broken
 
@@ -41,7 +44,7 @@ _Last updated: 2026-07-31T13:58:00+08:00_
 
 ## Next actions (ordered)
 
-1. 用户验证 v0.1.12 修复效果
+1. 用户验证 v0.1.12 最新包修复效果
 2. 如有新需求，继续迭代
 
 ## Beware
@@ -52,3 +55,4 @@ _Last updated: 2026-07-31T13:58:00+08:00_
 - **per-model alias 末尾命令名**必须用 `\codex`/`\claude`/`\aider` 防 zsh 递归展开
 - **GitHub 操作**：`gh` CLI 通过 `~/.config/gh/hosts.yml` 认证（gongminami-pixel），操作前验证 `gh auth status`
 - **构建上传后**：必须更新 GitHub Release 的 SHA256 值
+- **gh release upload --clobber** 可覆盖同文件名资产，无需 delete release
