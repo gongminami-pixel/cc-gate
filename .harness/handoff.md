@@ -1,6 +1,6 @@
 # Harness Handoff
 
-_Last updated: 2026-08-02T12:16:12+08:00_
+_Last updated: 2026-08-03T04:36:11+08:00_
 
 ## Goal
 
@@ -9,35 +9,38 @@ _Last updated: 2026-08-02T12:16:12+08:00_
 ## State snapshot
 
 - **Branch**: main
-- **Commit**: 493ea4f fix: claude alias 加 permission-mode bypassPermissions + thinking disabled 限 deepseek
-- **Tag**: v0.1.12
-- **Released**: v0.1.12 GitHub Release（macOS DMG + Windows exe 双包 + SHA256，第四批包）
-- **Uncommitted**: src-tauri/src/config_writer.rs, src-tauri/src/types.rs（gen_aliases_impl 重构提取 codex_alias_line 函数）
+- **Commit**: cc44b60 docs(harness): 同步记忆 — 开源项目 push 规则决策
+- **Tag**: v0.1.13
+- **Released**: v0.1.13 GitHub Release（macOS DMG + Windows exe 双包 + SHA256，2026-08-02 发布）
+- **Uncommitted** (3 files, 实质改动):
+  - `claude-proxy.js`: SSE 空内容过滤（`d.content !== ''` 防空字符串伪触发）
+  - `src-tauri/src/proxy_manager.rs`: macOS lsof 绝对路径 `/usr/sbin/lsof`（GUI 不继承 PATH）
+  - `src-tauri/tauri.conf.json`: version bump `0.1.12` → `0.1.13`
 
 ## Context you must load (JIT)
 
 - `src-tauri/src/config_writer.rs` — 配置写入（alias 生成含 `\codex`/`\claude`/`\aider` 防展开）
-- `claude-proxy.js` — 代理路由核心
+- `claude-proxy.js` — 代理路由核心（SSE 流式处理）
 - `chat-proxy.js` — chat 代理逻辑
+- `src-tauri/src/proxy_manager.rs` — 端口管理 + lsof 路径
 - `src-tauri/src/commands/usage.rs` — 日志诊断出口
 - `src/components/PageAbout.vue` — 诊断信息页
 - `windows-vm-build-guide.md` — Windows 虚拟机构建 Runbook
-- `cc-gate-alias-展开bug.md` — zsh alias 递归展开的详细分析
-- `~/.config/gh/hosts.yml` — GitHub CLI 认证（token = github_pat_...）
-  - 用户: gongminami-pixel
-  - 注意: 每次 push/release 之前必须先确认 `gh auth status` 可用；若不可用检查 hosts.yml 是否存在
+- `~/.config/gh/hosts.yml` — GitHub CLI 认证（gongminami-pixel）
 
 ## What works
 
-- ✅ Mac DMG + Windows exe 双端包 v0.1.12 已上传 GitHub Release（第四批包，2026-08-02）
-- ✅ claude-proxy.js 路由修复、config_writer.rs 配置加固、proxy_manager.rs 启动修复
-- ✅ 诊断信息页（版本号 + 日志尾部 + 一键复制）
+- ✅ v0.1.13 GitHub Release 已发布（2026-08-02）：macOS DMG + Windows exe 双包 + SHA256
+- ✅ claude-proxy.js SSE 空内容过滤修复
+- ✅ proxy_manager.rs macOS lsof 绝对路径修复（GUI 不继承 /usr/sbin PATH）
+- ✅ 版本号 bump 到 0.1.13
 - ✅ zsh alias 递归展开 bug 已修复（`\codex`/`\claude`/`\aider`）
-- ✅ 找人修改的新代码已合入（chat-proxy.js, config_writer.rs, paths.rs, package-lock.json）
+- ✅ 诊断信息页（版本号 + 日志尾部 + 一键复制）
 - ✅ Claude alias 加 `--permission-mode bypassPermissions --thinking disabled`（仅 deepseek 加 thinking disabled）
-- ✅ GitHub Release v0.1.12 最新包（2026-08-02 第四批更新）
-  - macOS: `d9080a4ec55caaaf996c32e046ed3958f6ace310a173a5bcccd9b5b9fad9b1ac`
-  - Windows: `a9702caeda64196ae7458617fa68a73fcb6432ba9ab9966cf666ded7e4d05849`
+
+### v0.1.13 SHA256
+- **macOS**: `7db74b7b23fd17ab3d48901afaf2732e18c7c63bdffda0ca48f88087f24b125b`
+- **Windows**: `ef870caf68fea629ab76fddea4dca4d86008ae7e90c97ce1d21f4b958f49d824`
 
 ## What's broken
 
@@ -45,9 +48,10 @@ _Last updated: 2026-08-02T12:16:12+08:00_
 
 ## Next actions (ordered)
 
-1. 用户验证 v0.1.12 第四批包修复效果
-2. 工作区未提交的 config_writer.rs + types.rs 重构（gen_aliases_impl → codex_alias_line 提取）需要决定提交或放弃
-3. 如有新需求，继续迭代
+1. 提交工作区 3 个未提交改动（SSE 修复 + lsof 路径修复 + version bump）
+2. 推送 commit 到 GitHub 并同步更新 Release 的 Release Notes（如有代码提交 SHA）
+3. 用户验证 v0.1.13 修复效果
+4. 如有新需求，继续迭代
 
 ## Beware
 
@@ -59,3 +63,4 @@ _Last updated: 2026-08-02T12:16:12+08:00_
 - **构建上传后**：必须更新 GitHub Release 的 SHA256 值
 - **gh release upload --clobber** 可覆盖同文件名资产，无需 delete release
 - **★本项目是开源项目**（https://github.com/gongminami-pixel/cc-gate）：每次"同步加提交"后必须额外 `git push origin main`，与全局 CLAUDE.md "只本地不 push"不同
+- **★v0.1.13 是全新 release tag**（非覆盖旧 tag），与之前 v0.1.12 四批覆盖更新不同

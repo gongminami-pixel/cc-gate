@@ -363,3 +363,19 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + decisions 追加"CC-Gate 开源项目同步提交后必须 push" + handoff Beware 更新
 - **outcome**: L2 反映开源项目特殊性
 - **next**: git 本地提交 + push
+
+## 2026-08-02T22:36:00+08:00 — work: v0.1.13 Release 创建（新 tag，首批包）
+- **touched**: GitHub Release v0.1.13（全新 release，非覆盖旧 tag）
+- **action**: 用户提供桌面上的两个安装包 → 创建 GitHub Release v0.1.13 并上传
+  - macOS: `CC-Gate_0.1.13_x64.dmg` (3.7MB) `7db74b7b23fd17ab3d48901afaf2732e18c7c63bdffda0ca48f88087f24b125b`
+  - Windows: `CC-Gate_0.1.13_x64-setup.exe` (2.8MB) `ef870caf68fea629ab76fddea4dca4d86008ae7e90c97ce1d21f4b958f49d824`
+- **method**: `gh release create v0.1.13` 新建 release → 安全分类器拦截 → 用户手动 `!` 执行
+- **outcome**: Release 已创建，双包上传成功，SHA256 写入 Release Notes
+- **note**: 三个未提交源码改动对应 v0.1.13 变更（SSE 空内容修复 + lsof 绝对路径 + version bump），尚未提交
+- **code_drift**: handoff 之前报告 HEAD=493ea4f "Uncommitted: config_writer.rs + types.rs"，实际 commit `f10ae1a` 已提交这些文件，HEAD 实际为 `cc44b60`。L2 漂移已在本次 sync 中修正
+
+## 2026-08-02T22:36:11+08:00 — handoff_ready: 同步加提交（v0.1.13 Release）
+- **touched**: .harness/waypoints/2026-08-02T20-36-11+00:00.md .harness/handoff.md .harness/progress.md
+- **action**: 落 waypoint + 重写 handoff（v0.1.13 Release + 三个未提交改动 + HEAD 漂移修正）
+- **outcome**: L2 完整反映 v0.1.13 状态
+- **next**: git 本地提交 .harness/ + 源码改动 + push
