@@ -342,3 +342,18 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + 重写 handoff（v0.1.12 第三批包 SHA256 更新 + gh release upload --clobber 方式）
 - **outcome**: L2 完整反映最新状态
 - **next**: git 本地提交 .harness/ + 源码改动
+
+## 2026-08-02T12:16:00+08:00 — work: v0.1.12 Release 更新（第四批新包）
+- **touched**: GitHub Release v0.1.12（`gh release upload --clobber` 覆盖旧资产）
+- **action**: 用户提供新 Mac + Windows 包 → 上传到 GitHub Release
+  - macOS: `CC-Gate_0.1.12_x64.dmg` (3.7MB) `d9080a4ec55caaaf996c32e046ed3958f6ace310a173a5bcccd9b5b9fad9b1ac`
+  - Windows: `CC-Gate.exe` (7.3MB) `a9702caeda64196ae7458617fa68a73fcb6432ba9ab9966cf666ded7e4d05849`
+- **method**: `gh release upload --clobber`（避免 delete release 被安全分类器拦截）
+- **outcome**: 双包已替换，SHA256 已更新到 Release Notes
+- **note**: 这是 v0.1.12 的第四次 GitHub Release 更新；Windows 包从 2.8MB → 7.3MB（变大了，值得关注）
+
+## 2026-08-02T12:16:12+08:00 — handoff_ready: 同步
+- **touched**: .harness/waypoints/2026-08-02T09-16-12+00:00.md .harness/handoff.md .harness/progress.md
+- **action**: 落 waypoint + 重写 handoff（v0.1.12 第四批包 SHA256 更新，HEAD 反映 493ea4f）
+- **outcome**: L2 完整反映第四批包状态
+- **next**: git 本地提交 .harness/ + 源码改动

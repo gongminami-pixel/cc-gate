@@ -1,6 +1,6 @@
 # Harness Handoff
 
-_Last updated: 2026-07-31T23:32:00+08:00_
+_Last updated: 2026-08-02T12:16:12+08:00_
 
 ## Goal
 
@@ -9,10 +9,10 @@ _Last updated: 2026-07-31T23:32:00+08:00_
 ## State snapshot
 
 - **Branch**: main
-- **Commit**: 8a38e1e docs(harness): 同步记忆 — v0.1.12 Release 发版 + 找人修改代码合入
+- **Commit**: 493ea4f fix: claude alias 加 permission-mode bypassPermissions + thinking disabled 限 deepseek
 - **Tag**: v0.1.12
-- **Released**: v0.1.12 GitHub Release（macOS DMG + Windows exe 双包 + SHA256）
-- **Uncommitted**: claude-proxy.js, src-tauri/src/config_writer.rs（工作区有未提交源码改动）
+- **Released**: v0.1.12 GitHub Release（macOS DMG + Windows exe 双包 + SHA256，第四批包）
+- **Uncommitted**: src-tauri/src/config_writer.rs, src-tauri/src/types.rs（gen_aliases_impl 重构提取 codex_alias_line 函数）
 
 ## Context you must load (JIT)
 
@@ -29,14 +29,15 @@ _Last updated: 2026-07-31T23:32:00+08:00_
 
 ## What works
 
-- ✅ Mac DMG + Windows exe 双端包 v0.1.12 已上传 GitHub Release（SHA256 已更新）
+- ✅ Mac DMG + Windows exe 双端包 v0.1.12 已上传 GitHub Release（第四批包，2026-08-02）
 - ✅ claude-proxy.js 路由修复、config_writer.rs 配置加固、proxy_manager.rs 启动修复
 - ✅ 诊断信息页（版本号 + 日志尾部 + 一键复制）
 - ✅ zsh alias 递归展开 bug 已修复（`\codex`/`\claude`/`\aider`）
 - ✅ 找人修改的新代码已合入（chat-proxy.js, config_writer.rs, paths.rs, package-lock.json）
-- ✅ GitHub Release v0.1.12 最新包（2026-07-31 第三批更新）
-  - macOS: `d064dfd7438f127e15477bcebb20acd33a7bc2935a93502f13eee7a558a22ee7`
-  - Windows: `06dce8e5aaad389fe3ce8b4f5b3982829b8f8d4a438f78f2439916500a9e3a6f`
+- ✅ Claude alias 加 `--permission-mode bypassPermissions --thinking disabled`（仅 deepseek 加 thinking disabled）
+- ✅ GitHub Release v0.1.12 最新包（2026-08-02 第四批更新）
+  - macOS: `d9080a4ec55caaaf996c32e046ed3958f6ace310a173a5bcccd9b5b9fad9b1ac`
+  - Windows: `a9702caeda64196ae7458617fa68a73fcb6432ba9ab9966cf666ded7e4d05849`
 
 ## What's broken
 
@@ -44,8 +45,9 @@ _Last updated: 2026-07-31T23:32:00+08:00_
 
 ## Next actions (ordered)
 
-1. 用户验证 v0.1.12 最新包修复效果
-2. 如有新需求，继续迭代
+1. 用户验证 v0.1.12 第四批包修复效果
+2. 工作区未提交的 config_writer.rs + types.rs 重构（gen_aliases_impl → codex_alias_line 提取）需要决定提交或放弃
+3. 如有新需求，继续迭代
 
 ## Beware
 
