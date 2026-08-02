@@ -509,34 +509,16 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
     if !codex_slugs.is_empty() {
         let port = cfg.proxy_ports.mimo2codex;
         // Native alias: "codex" (uses first assigned model, no -suffix)
-        if let Some(m) = codex_slugs.first().and_then(|s| cfg.models.iter().find(|m| &m.slug == s)) {
-            if powershell {
-                out.push_str(&format!(
-                    "function codex {{ $env:CC_GATE_MODEL='{}'; $env:OPENAI_API_KEY='proxy'; codex --dangerously-bypass-approvals-and-sandbox -c model_provider='custom' -c model='{}' -c base_url='http://127.0.0.1:{port}/v1' -c model_context_window={} -c model_max_output_tokens={} -c requires_openai_auth='false' }}\n",
-                    m.slug, m.slug, m.context_window, m.max_output_tokens
-                ));
-            } else {
-                out.push_str(&format!(
-                    "alias codex='CC_GATE_MODEL=\"{}\" OPENAI_API_KEY=proxy codex --dangerously-bypass-approvals-and-sandbox -c model_provider=\"custom\" -c model=\"{}\" -c base_url=\"http://127.0.0.1:{port}/v1\" -c model_context_window={} -c model_max_output_tokens={} -c requires_openai_auth=\"false\"'\n",
-                    m.slug, m.slug, m.context_window, m.max_output_tokens
-                ));
+        if let Some(slug) = codex_slugs.first() {
+            if let Some(m) = cfg.models.iter().find(|m| &m.slug == slug) {
+                out.push_str(&codex_alias_line("codex", m, port, powershell, cfg));
             }
         }
         // Per-model aliases: codex-{short}
         for slug in &codex_slugs {
             if let Some(m) = cfg.models.iter().find(|m| &m.slug == slug) {
                 let aname = codex_alias(slug);
-                if powershell {
-                    out.push_str(&format!(
-                        "function {} {{ $env:CC_GATE_MODEL='{}'; $env:OPENAI_API_KEY='proxy'; codex --dangerously-bypass-approvals-and-sandbox -c model_provider='custom' -c model='{}' -c base_url='http://127.0.0.1:{port}/v1' -c model_context_window={} -c model_max_output_tokens={} -c requires_openai_auth='false' }}\n",
-                        aname, slug, m.slug, m.context_window, m.max_output_tokens
-                    ));
-                } else {
-                    out.push_str(&format!(
-                        "alias {}='CC_GATE_MODEL=\"{}\" OPENAI_API_KEY=proxy \\codex --dangerously-bypass-approvals-and-sandbox -c model_provider=\"custom\" -c model=\"{}\" -c base_url=\"http://127.0.0.1:{port}/v1\" -c model_context_window={} -c model_max_output_tokens={} -c requires_openai_auth=\"false\"'\n",
-                        aname, slug, m.slug, m.context_window, m.max_output_tokens
-                    ));
-                }
+                out.push_str(&codex_alias_line(&aname, m, port, powershell, cfg));
             }
         }
     }
@@ -718,7 +700,8 @@ fn clean_stale_bat_files() {
         "codex.bat", "codex.cmd",
         "claude-ds.bat", "claude-ds.cmd", "claude-mimo.bat", "claude-mimo.cmd",
         "claude-glm.bat", "claude-glm.cmd", "claude-qwen.bat", "claude-qwen.cmd",
-        "codex-ds.bat", "codex-ds.cmd", "codex-mimo.bat", "codex-mimo.cmd",
+        "codex-ds.bat", "codex-ds.cmd", "codex-ds-flash.bat", "codex-ds-flash.cmd",
+        "codex-mimo.bat", "codex-mimo.cmd",
         "codex-glm.bat", "codex-glm.cmd", "codex-qwen.bat", "codex-qwen.cmd",
     ];
     for name in candidates {
@@ -895,6 +878,46 @@ fn short(slug: &str) -> &str { match slug {
     _ => slug,
 }}
 fn codex_alias(s: &str) -> String { format!("codex-{}", short(s)) }
+
+/// Build a Codex alias line. When native_responses is set, the alias connects
+/// directly to the provider's Responses API (bypassing mimo2codex).
+/// Otherwise it routes through the local proxy.
+fn codex_alias_line(aname: &str, m: &ModelDef, port: u16, powershell: bool, cfg: &AppConfig) -> String {
+    if m.native_responses {
+        if let Some(meta) = meta_by_id(&m.provider) {
+            let api_key = cfg.api_keys.get(meta.env_key).map(|k| k.as_str()).unwrap_or("proxy");
+            if powershell {
+                format!(
+                    "function {aname} {{ $env:CC_GATE_MODEL='{slug}'; $env:OPENAI_API_KEY='{key}'; codex --dangerously-bypass-approvals-and-sandbox -c model_provider='custom' -c model='{slug}' -c base_url='{url}' -c model_context_window={ctx} -c model_max_output_tokens={max} }}\n",
+                    aname=aname, slug=m.slug, key=api_key, url=meta.base_url, ctx=m.context_window, max=m.max_output_tokens
+                )
+            } else {
+                format!(
+                    "alias {aname}='CC_GATE_MODEL=\"{slug}\" OPENAI_API_KEY={key} \\codex --dangerously-bypass-approvals-and-sandbox -c model_provider=\"custom\" -c model=\"{slug}\" -c base_url=\"{url}\" -c model_context_window={ctx} -c model_max_output_tokens={max}'\n",
+                    aname=aname, slug=m.slug, key=api_key, url=meta.base_url, ctx=m.context_window, max=m.max_output_tokens
+                )
+            }
+        } else {
+            codex_alias_line_proxy(aname, m, port, powershell)
+        }
+    } else {
+        codex_alias_line_proxy(aname, m, port, powershell)
+    }
+}
+
+fn codex_alias_line_proxy(aname: &str, m: &ModelDef, port: u16, powershell: bool) -> String {
+    if powershell {
+        format!(
+            "function {aname} {{ $env:CC_GATE_MODEL='{slug}'; $env:OPENAI_API_KEY='proxy'; codex --dangerously-bypass-approvals-and-sandbox -c model_provider='custom' -c model='{slug}' -c base_url='http://127.0.0.1:{port}/v1' -c model_context_window={ctx} -c model_max_output_tokens={max} -c requires_openai_auth='false' }}\n",
+            aname=aname, slug=m.slug, port=port, ctx=m.context_window, max=m.max_output_tokens
+        )
+    } else {
+        format!(
+            "alias {aname}='CC_GATE_MODEL=\"{slug}\" OPENAI_API_KEY=proxy \\codex --dangerously-bypass-approvals-and-sandbox -c model_provider=\"custom\" -c model=\"{slug}\" -c base_url=\"http://127.0.0.1:{port}/v1\" -c model_context_window={ctx} -c model_max_output_tokens={max} -c requires_openai_auth=\"false\"'\n",
+            aname=aname, slug=m.slug, port=port, ctx=m.context_window, max=m.max_output_tokens
+        )
+    }
+}
 fn claude_alias(s: &str) -> String { format!("claude-{}", short(s)) }
 fn aider_alias(s: &str) -> String { format!("aider-{}", short(s)) }
 

@@ -127,6 +127,9 @@ pub struct ModelDef {
     pub enabled: bool, pub context_window: u32, pub max_output_tokens: u32,
     pub priority: u32, pub default_reasoning_level: String,
     #[serde(default = "default_true")] pub supports_reasoning_summaries: bool,
+    /// When true, Codex CLI aliases connect directly to the provider's Responses API
+    /// (bypassing the local mimo2codex Chat Completions translation proxy).
+    #[serde(default)] pub native_responses: bool,
     pub input_price_per_1k: f64, pub output_price_per_1k: f64,
 }
 impl Default for ModelDef {
@@ -134,14 +137,14 @@ impl Default for ModelDef {
         Self { slug: String::new(), display_name: String::new(), provider: String::new(),
             enabled: true, context_window: 131072, max_output_tokens: 16384, priority: 100,
             default_reasoning_level: "high".into(), supports_reasoning_summaries: true,
-            input_price_per_1k: 0.0, output_price_per_1k: 0.0 }
+            native_responses: false, input_price_per_1k: 0.0, output_price_per_1k: 0.0 }
     }
 }
 
 pub fn builtin_models() -> Vec<ModelDef> {
     vec![
         ModelDef { slug: "deepseek-v4-pro".into(),     display_name: "DeepSeek V4 Pro".into(),     provider: "deepseek".into(), enabled: true,  context_window: 1_000_000, max_output_tokens: 393_216, priority: 100,  default_reasoning_level: "high".into(),   input_price_per_1k: 0.0003, output_price_per_1k: 0.002,  ..Default::default() },
-        ModelDef { slug: "deepseek-v4-flash".into(),    display_name: "DeepSeek V4 Flash".into(),    provider: "deepseek".into(), enabled: true,  context_window: 1_000_000, max_output_tokens: 393_216, priority: 101,  default_reasoning_level: "medium".into(), input_price_per_1k: 0.0001, output_price_per_1k: 0.0005, ..Default::default() },
+        ModelDef { slug: "deepseek-v4-flash".into(),    display_name: "DeepSeek V4 Flash".into(),    provider: "deepseek".into(), enabled: true,  context_window: 1_000_000, max_output_tokens: 393_216, priority: 101,  default_reasoning_level: "medium".into(), input_price_per_1k: 0.0001, output_price_per_1k: 0.0005, native_responses: true, ..Default::default() },
         ModelDef { slug: "glm-5.2".into(),              display_name: "GLM-5.2".into(),              provider: "glm".into(),      enabled: true,  context_window: 1_000_000, max_output_tokens: 16_384,  priority: 200,  default_reasoning_level: "high".into(),   input_price_per_1k: 0.0014, output_price_per_1k: 0.0014, ..Default::default() },
         ModelDef { slug: "qwen3.8-max-preview".into(),  display_name: "Qwen3.8 Max Preview".into(),  provider: "qwen38".into(),    enabled: true,  context_window: 1_048_576, max_output_tokens: 65_536,  priority: 300,  default_reasoning_level: "high".into(),   input_price_per_1k: 0.0013, output_price_per_1k: 0.0052, ..Default::default() },
         ModelDef { slug: "qwen-max".into(),             display_name: "Qwen-Max".into(),             provider: "qwen".into(),      enabled: false, context_window: 131_072,   max_output_tokens: 16_384,  priority: 301,  default_reasoning_level: "high".into(),   input_price_per_1k: 0.003,  output_price_per_1k: 0.012,  ..Default::default() },
