@@ -154,9 +154,16 @@ fn find_node() -> (PathBuf, PathBuf) {
 }
 
 /// Kill whatever is listening on a TCP port (if anything).
+/// Uses lsof to find PIDs and kill -9 to terminate them.
+/// Finds lsof at known paths because GUI apps don't inherit /usr/sbin in PATH.
 fn kill_port_occupant(port: u16) {
     let port_s = port.to_string();
-    if let Ok(out) = std::process::Command::new("lsof")
+    let lsof = if cfg!(target_os = "macos") {
+        "/usr/sbin/lsof"
+    } else {
+        "lsof" // assume in PATH on Linux
+    };
+    if let Ok(out) = std::process::Command::new(lsof)
         .args(["-ti", &format!(":{}", port_s)])
         .output()
     {
@@ -168,6 +175,8 @@ fn kill_port_occupant(port: u16) {
                 .arg(pid)
                 .output();
         }
+    } else {
+        tracing::warn!("kill_port_occupant: lsof not found at {lsof}, port {} may remain occupied", port);
     }
 }
 
@@ -218,8 +227,9 @@ impl ProxyManager {
         for name in &["mimo2codex", "claude-proxy", "chat-proxy"] {
             let (port, script) = self.proxy_script_for(name);
             if port_is_listening(port) {
-                tracing::info!("Proxy {} port {} already listening — skipping startup", name, port);
-                continue;
+                tracing::info!("Proxy {} port {} already listening — killing old occupant", name, port);
+                kill_port_occupant(port);
+                tokio::time::sleep(Duration::from_millis(500)).await;
             }
 
             // One attempt with 30s timeout — npx may download packages on first run

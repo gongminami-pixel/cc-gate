@@ -288,7 +288,7 @@ function openaiStreamToAnthropicSSE(url, opts, body, clientRes, modelId) {
 
           // ── text content ──────────────────────────────
           const doText = () => {
-            if (d.content != null) {
+            if (d.content != null && d.content !== '') {
               if (blockKind !== 'text') closeBlock();
               if (blockIdx < 0) {
                 blockIdx = 0; blockKind = 'text';
