@@ -357,3 +357,9 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + 重写 handoff（v0.1.12 第四批包 SHA256 更新，HEAD 反映 493ea4f）
 - **outcome**: L2 完整反映第四批包状态
 - **next**: git 本地提交 .harness/ + 源码改动
+
+## 2026-08-02T12:23:00+08:00 — handoff_ready: 同步加提交（开源 push 规则决策）
+- **touched**: .harness/waypoints/2026-08-02T09-23-00+00:00.md .harness/handoff.md .harness/progress.md .harness/decisions.md
+- **action**: 落 waypoint + decisions 追加"CC-Gate 开源项目同步提交后必须 push" + handoff Beware 更新
+- **outcome**: L2 反映开源项目特殊性
+- **next**: git 本地提交 + push

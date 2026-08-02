@@ -126,3 +126,10 @@ _Append-only. Each entry captures the "why" behind a choice._
 **Alternatives**: 做成展开/折叠面板——仍然占空间
 **Evidence**: src/components/PageRelayKeys.vue
 **Supersedes**: 旧内联表单布局
+
+## 2026-08-02T12:16:00+08:00 — CC-Gate 为开源项目，同步提交后必须 push
+**Why**: 本项目开源在 https://github.com/gongminami-pixel/cc-gate，与用户其他闭源/私有项目不同。"同步加提交"后代码仅在本地，其他人（包括用户的其他设备）看不到——必须 git push origin main
+**What**: 全局 CLAUDE.md 约定"同步加提交=只本地不 push"对 CC-Gate 不适用；每次本地提交后需额外 push 到 GitHub
+**Alternatives**: 改全局 CLAUDE.md ——但那是用户所有项目的通用规则，不能为单项目改动
+**Supersedes**: 全局 CLAUDE.md "同步加提交=永不 push"（仅限本项目覆盖）
+**Impact**: 每次"同步加提交"后，若用户未明确说"只本地"，需主动 push 到 origin/main
