@@ -1,54 +1,37 @@
 # Harness Handoff
 
-_Last updated: 2026-08-11T11:20:00+07:00_
+_Last updated: 2026-08-11T11:35:00+07:00_
 
 ## Goal
 
-构建 CC-Gate — Tauri 2 + Vue 3 桌面应用，统一管理 10 AI Agent 的模型/路由/Key/Shell。开源在 https://github.com/gongminami-pixel/cc-gate。当前任务已全部完成：0.1.17 双端构建发布 + 全量更新（push + 同步记忆 + 提交）。
+构建 CC-Gate — Tauri 2 + Vue 3 桌面应用，统一管理 10 AI Agent 的模型/路由/Key/Shell。开源在 https://github.com/gongminami-pixel/cc-gate。当前 0.1.18 已发布：OpenCode 接入 + 检测修复 + 配置保留。
 
-## State snapshot
+## Current Status
 
-- **Branch**: main @ a1640a3（release: v0.1.17 catalog 文件名根治 + 双端构建发布 + 同步记忆）—— 已 push origin main
-- **Version**: 0.1.17（已发布）
-- **Released**: v0.1.17 GitHub Release 已创建，双包已上传（DMG 118b2891... / setup.exe 430b3c34...，SHA256 表已更新）
-- **Installed**: /Applications/CC-Gate.app = 0.1.17（Info.plist 0.1.17 + 二进制含 catalog 修复 2 处）；旧版备份 .bak-20260811-102433 / -111351
-- **tag**: 本地 v0.1.17 → a1640a3；远端 v0.1.17 → 0fad240（旧 commit，用户拒绝 force push，接受现状）
+- v0.1.18 双端发布完成（Release: https://github.com/gongminami-pixel/cc-gate/releases/tag/v0.1.18）
+  - macOS DMG / Windows setup.exe 已上传，SHA256 表 + Changes 三段在 Release body
+  - /Applications/CC-Gate.app = 0.1.18（旧版备份 .bak-20260811-102433/-111351/-113107）
+  - main 最新 = 0.1.18 发布提交 + 同步记忆提交（待本轮提交）
+- 9 agent 全部可代理且检测正确（full_apply_all_agents_proxied 回归测试常驻）
+- 本机配置：codex config.toml（含保留的 [projects]）、opencode.jsonc（ccgate provider）、openclaw.json（ccgate provider）、claude settings.json、hermes、zshrc 别名块 —— 全部为 cc-gate 写入状态
 
-## Context you must load (JIT)
+## Next Actions
 
-- `src-tauri/src/paths.rs` — codex_model_catalog_json() = ~/.codex/cc-gate-model-catalog.json（0.1.17 根治核心）
-- `src-tauri/src/config_writer.rs` — write_all_tool_configs 全链 + codex 模板 model_catalog_json = "cc-gate-model-catalog.json"
-- `src-tauri/src/backup.rs` — 备份/恢复（.orig/.absent）+ is_agent_proxied 检测
-- `scripts/release.sh` — GitHub Release 脚本（版本号硬编码，0.1.17；Changes 段反引号会被 heredoc 吞，用纯文本或 gh release edit 修正）
+1. 用户启动 app 后验证：应用按钮 → 9 agent 状态全绿（含 OpenCode/OpenClaw）
+2. 若用户需要：把 10:32 被旧版抹掉的 MCP 配置（node_repl / code-review-graph）补回 config.toml（现在有 preserve 逻辑不会再丢）
+3. 无（0.1.18 三项已全部完成并自动化测试）
 
-## What works
+## Key Decisions (latest)
 
-- ✅ 0.1.17 双端构建 + 发布完成（macOS DMG 3.7M + Windows NSIS setup 2.9M，SHA256 双端校验一致）
-- ✅ main 已 push（a1640a3），含源码修复（paths.rs/config_writer.rs/DESIGN.md）+ 版本 bump + .harness 同步
-- ✅ catalog 文件名根治落地：本机 config.toml → cc-gate-model-catalog.json（7 模型合并目录），codex-ds 切换器全模型
-- ✅ 全链 headless 测试（apply → restore → re-apply）：Aider/Cursor 恢复生效、OpenClaw provider 写入正确
-- ✅ cc-gate skill 已更新：发版流程教训（先 push 再发版）+ 3 个测试发现 + manual_apply 范围说明
+- 0.1.18 三个候选一次性实现 + 自动化测试 + 发布（用户要求"全部一次性搞好"）
+- JSONC 解析换官方 json5 crate（手写行级剥离无法区分尾逗号/分隔逗号）
+- OpenCode 路径修正为 ~/.config/opencode/opencode.jsonc（原指向 config.toml 是错的）
+- write_codex_config 用 toml crate 解析保留 [projects.*]/[mcp_servers.*]
+- 发布顺序教训已应用：先 commit+push 再 release.sh（v0.1.18 tag 指向 bed4dd5 正确）
 
-## What's broken
+## Agents
 
-- ⚠️ **发现 1（环境）**：本机 .orig 备份被早期 cc-gate 版本污染 → 恢复按钮恢复的是"旧 cc-gate 状态"；干净机器验证
-- ⚠️ **发现 2（代码 bug）**：`is_agent_proxied(OpenClaw)` 查 `"id":"ccgate"`，实际写 `models.providers.ccgate`（map key）→ UI 恒显示 OpenClaw 未代理。修复方向：检测改为查 models.providers 含 "ccgate"
-- ⚠️ **发现 3（未完成功能）**：OpenCode 半成品 —— 无 write_opencode_config；paths 指向 config.toml 而实际是 opencode.jsonc；检测查 TOML 语法不符。需补写入函数 + 修路径/格式/检测
-- ⚠️ 远端 v0.1.17 tag 指向旧 commit（0fad240），Release 页 Source code 快照是 0.1.16；不影响双包下载
-- ⚠️ 本机 config.toml 用 write_codex_config 整文件模板会抹掉 [projects]/[mcp_servers]（待产品决策）
-
-## Next actions (ordered)
-
-1. （待用户决策）修复发现 2：is_agent_proxied(OpenClaw) 检测格式 → 0.1.18
-2. （待用户决策）实现发现 3：OpenCode 配置写入（write_opencode_config + 路径 opencode.jsonc + JSONC 检测）→ 0.1.18
-3. （待用户决策）write_codex_config 模板合并保留 [projects]/[mcp_servers]
-4. 下次发版顺序：commit → push main → 再跑 release.sh（避免 tag 指旧 commit）
-
-## Beware
-
-- **本机 config.toml 不可用 write_codex_config 整文件模板**（会抹掉 [projects]/[mcp_servers]）—— 已记入 skill
-- **.orig 备份被污染**：恢复按钮测试必须用干净机器
-- **release.sh 版本号硬编码**：发版必须改 TAG/VERSION/DMG/EXE 四处；Changes 段反引号被 heredoc 吞
-- **★本项目是开源项目**：每次"同步加提交"后必须额外 `git push origin main`
-- **★0.1.18 是新 release tag**（非覆盖）
-- VM：prlctl exec 非 Pro 不可用；SSH 免密可达（ping 不通是防火墙挡 ICMP）；Windows 源码包必须含 tsconfig.node.json（曾漏导致 vue-tsc 失败）
+- 10 agents: codex_cli/codex_desktop/codex_reasonix/claude_cli/claude_desktop/hermes/openclaw/opencode/aider/cursor
+- 代理端口：8688 codex / 8689 claude / 8690 chat(opencode/openclaw)，由 app 拉起
+- 合并模型目录：~/.codex/cc-gate-model-catalog.json（7 模型）
+- 配置管理：备份 ~/.mimo2codex/backups/*.orig（幂等）→ 写全部 agent 配置 → 恢复按钮还原

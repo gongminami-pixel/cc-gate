@@ -395,3 +395,12 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 重写 handoff（0.1.17 发布完成状态：双包已传、main 已 push、/Applications 已装 0.1.17、SHA256 已更新）
 - **outcome**: L2 完整反映 0.1.17 终态；Next actions 收口为 3 个待用户决策的修复项（OpenClaw 检测 / OpenCode 实现 / write_codex_config 模板合并）
 - **next**: 用户决策后开 0.1.18 任务
+## 2026-08-11T11:35:00+07:00 — work: 0.1.18 三项修复 + 双端发布 + 全链测试（bed4dd5）
+- **touched**: src-tauri/src/config_writer.rs backup.rs paths.rs Cargo.toml scripts/release.sh tauri.conf.json DESIGN.md
+- **action**: OpenCode 写入（opencode.jsonc ccgate provider）、OpenClaw/OpenCode 检测修复（models.providers.ccgate / provider.ccgate）、preserve_user_sections（toml crate 保留 projects/mcp_servers）、JSONC 解析换 json5 crate；回归测试 3 项（8 项全绿 + CCGATE_FULL_TEST 9 agent 全 proxied）；0.1.18 双端构建 + Release 发布 + 装 Mac
+- **result**: 9 agent 全 proxied ✓；cargo test 8/8 ✓；npm build ✓；Release v0.1.18 双包 + SHA256 ✓
+- **blocked**: 无
+
+## 2026-08-11T11:35:00+07:00 — handoff_ready: 0.1.18 发布完成（同步记忆收尾）
+- **touched**: .harness/handoff.md
+- **action**: 重写 handoff（0.1.18 终态）
