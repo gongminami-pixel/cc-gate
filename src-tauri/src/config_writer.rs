@@ -508,11 +508,11 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
     let codex_slugs = cfg.agent_models.get("codex_cli").cloned().unwrap_or_default();
     if !codex_slugs.is_empty() {
         let port = cfg.proxy_ports.mimo2codex;
-        // Native alias: "codex" (uses first assigned model, no -suffix)
-        if let Some(slug) = codex_slugs.first() {
-            if let Some(m) = cfg.models.iter().find(|m| &m.slug == slug) {
-                out.push_str(&codex_alias_line("codex", m, port, powershell, cfg));
-            }
+        // Native alias: "codex" — official OpenAI (requires `codex login`), no CC-Gate env
+        if powershell {
+            out.push_str("function codex { & (Get-Command codex -CommandType Application) --dangerously-bypass-approvals-and-sandbox -c model_provider=\"openai\" -c model=\"gpt-5.5\" $args }\n");
+        } else {
+            out.push_str("alias codex='\\codex --dangerously-bypass-approvals-and-sandbox -c model_provider=\"openai\" -c model=\"gpt-5.5\"'\n");
         }
         // Per-model aliases: codex-{short}
         for slug in &codex_slugs {
@@ -526,23 +526,11 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
     // ── Claude CLI ──────────────────────────────────────────
     let claude_slugs = cfg.agent_models.get("claude_cli").cloned().unwrap_or_default();
     if !claude_slugs.is_empty() {
-        // Native alias: "claude" — prefer claude-opus-* models, fall back to first
-        let slug = claude_slugs.iter()
-            .find(|s| s.starts_with("claude-opus-"))
-            .or_else(|| claude_slugs.first())
-            .unwrap();
-        let cm = format!("claude-{}", slug);
-        let port = cfg.proxy_ports.claude_proxy;
+        // Native alias: "claude" — official Anthropic (user's own login/key), no CC-Gate env
         if powershell {
-            out.push_str(&format!(
-                "function claude {{ $env:CC_GATE_MODEL='{slug}'; $env:ANTHROPIC_BASE_URL='http://127.0.0.1:{port}'; $env:ANTHROPIC_AUTH_TOKEN='proxy'; $env:ANTHROPIC_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_OPUS_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_SONNET_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL='{cm}'; $env:ANTHROPIC_DEFAULT_FABLE_MODEL='{cm}'; $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY='1'; claude --dangerously-skip-permissions --permission-mode bypassPermissions }}\\n",
-                slug=slug, port=port, cm=cm,
-            ));
+            out.push_str("function claude { $env:ANTHROPIC_BASE_URL='https://api.anthropic.com'; & (Get-Command claude -CommandType Application) --dangerously-skip-permissions --permission-mode bypassPermissions $args }\n");
         } else {
-            out.push_str(&format!(
-                "alias claude='CC_GATE_MODEL=\"{slug}\" \\\n  ANTHROPIC_BASE_URL=\"http://127.0.0.1:{port}\" \\\n  ANTHROPIC_AUTH_TOKEN=proxy \\\n  ANTHROPIC_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=\"{cm}\" \\\n  ANTHROPIC_DEFAULT_FABLE_MODEL=\"{cm}\" \\\n  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \\\n  claude --dangerously-skip-permissions --permission-mode bypassPermissions'\n",
-                slug=slug, port=port, cm=cm,
-            ));
+            out.push_str("alias claude='ANTHROPIC_BASE_URL=\"https://api.anthropic.com\" \\claude --dangerously-skip-permissions --permission-mode bypassPermissions'\n");
         }
         // Per-model aliases: claude-{short}
         for slug in &claude_slugs {
@@ -566,20 +554,11 @@ fn gen_aliases_impl(cfg: &AppConfig, out: &mut String, powershell: bool) {
     // ── Aider ──────────────────────────────────────────────
     let aider_slugs = cfg.agent_models.get("aider").cloned().unwrap_or_default();
     if !aider_slugs.is_empty() {
-        // Native alias: "aider"
-        if let Some(slug) = aider_slugs.first() {
-            let port = cfg.proxy_ports.chat_proxy;
-            if powershell {
-                out.push_str(&format!(
-                    "function aider {{ $env:CC_GATE_MODEL='{}'; $env:OPENAI_API_BASE='http://127.0.0.1:{port}/v1'; $env:OPENAI_API_KEY='proxy'; aider --model openai/{} }}\n",
-                    slug, slug
-                ));
-            } else {
-                out.push_str(&format!(
-                    "alias aider='CC_GATE_MODEL=\"{}\" OPENAI_API_BASE=http://127.0.0.1:{}/v1 OPENAI_API_KEY=proxy aider --model openai/{}'\n",
-                    slug, port, slug
-                ));
-            }
+        // Native alias: "aider" — official default (user's own OpenAI key), no CC-Gate env
+        if powershell {
+            out.push_str("function aider { & (Get-Command aider -CommandType Application) $args }\n");
+        } else {
+            out.push_str("alias aider='\\aider'\n");
         }
         // Per-model: aider-{short}
         for slug in &aider_slugs {
@@ -924,6 +903,7 @@ fn aider_alias(s: &str) -> String { format!("aider-{}", short(s)) }
 #[cfg(test)]
 mod tests {
     use super::relay_env_key;
+    use super::gen_aliases_impl;
 
     #[test]
     fn ascii_names_keep_their_shape() {
@@ -936,8 +916,8 @@ mod tests {
     fn non_ascii_names_stay_distinct() {
         // Previously sanitize_provider_id() stripped these to "", collapsing every
         // CJK-named relay onto RELAY__API_KEY so they overwrote each other's key.
-        let a = relay_env_key("非线");
-        let b = relay_env_key("智谱");
+        let a = relay_env_key("中转站A");
+        let b = relay_env_key("中转站B");
         assert_ne!(a, b, "distinct names must not collide");
         for k in [&a, &b] {
             assert!(k.starts_with("RELAY_") && k.ends_with("_API_KEY"));
@@ -947,10 +927,53 @@ mod tests {
 
     #[test]
     fn mixed_and_degenerate_names() {
-        assert_eq!(relay_env_key("非线-1"), "RELAY_X975EX7EBF_1_API_KEY");
+        assert_eq!(relay_env_key("中转站-1"), "RELAY_X4E2DX8F6CX7AD9_1_API_KEY");
         // A name with nothing usable must still yield a valid, stable var name.
         assert_eq!(relay_env_key("-"), "RELAY_UNNAMED_API_KEY");
         assert_eq!(relay_env_key(""), "RELAY_UNNAMED_API_KEY");
+    }
+
+    #[test]
+    fn bare_aliases_are_native_suffixed_stay_proxy() {
+        use crate::types::AppConfig;
+        let mut cfg = AppConfig::default();
+        cfg.agent_models.insert("codex_cli".into(), vec!["deepseek-v4-pro".into()]);
+        cfg.agent_models.insert("claude_cli".into(), vec!["claude-opus-5".into(), "deepseek-v4-pro".into()]);
+        cfg.agent_models.insert("aider".into(), vec!["deepseek-v4-pro".into()]);
+        let mut out = String::new();
+        gen_aliases_impl(&cfg, &mut out, false);
+
+        // Bare (no suffix) aliases must be official/native — no CC-Gate env, no proxy port.
+        assert!(out.contains("alias codex='\\codex"), "bare codex must be native, got:\n{out}");
+        let bare_codex = out.lines().find(|l| l.starts_with("alias codex='")).unwrap();
+        assert!(!bare_codex.contains("model_provider=\"custom\""),
+            "bare codex must not route via custom provider: {bare_codex}");
+        assert!(out.contains("alias claude='ANTHROPIC_BASE_URL=\"https://api.anthropic.com\""),
+            "bare claude must point at official Anthropic:\n{out}");
+        assert!(!out.contains("alias claude='CC_GATE_MODEL="),
+            "bare claude must not inject CC_GATE_MODEL:\n{out}");
+        assert!(out.contains("alias aider='\\aider'"), "bare aider must be native:\n{out}");
+        assert!(!out.contains("alias aider='CC_GATE_MODEL="),
+            "bare aider must not inject CC_GATE_MODEL:\n{out}");
+
+        // Suffixed aliases must still route through the local proxies.
+        assert!(out.contains("alias codex-ds='CC_GATE_MODEL="), "codex-ds must stay proxied:\n{out}");
+        assert!(out.contains("alias claude-ds='CC_GATE_MODEL="), "claude-ds must stay proxied:\n{out}");
+        assert!(out.contains("alias aider-ds='CC_GATE_MODEL="), "aider-ds must stay proxied:\n{out}");
+
+        // Helpful when eyeballing generated output.
+        println!("\n=== generated aliases ===\n{out}");
+    }
+
+    /// Manual "Apply" without the GUI: rewrites providers.json + shell aliases from
+    /// the real ~/.CC-Gate/config.json. Gated — only runs when CCGATE_MANUAL_APPLY=1.
+    #[test]
+    fn manual_apply_when_requested() {
+        if std::env::var("CCGATE_MANUAL_APPLY").is_err() { return; }
+        let cfg = crate::config_store::load().expect("load ~/.CC-Gate/config.json");
+        super::write_providers(&cfg).expect("write providers.json");
+        super::write_shell_aliases(&cfg).expect("write shell aliases");
+        eprintln!("MANUAL-APPLY-OK");
     }
 }
 

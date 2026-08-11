@@ -20,7 +20,7 @@ const PROVIDERS_FILE = path.join(HOME, '.mimo2codex', 'providers.json');
 
 // ── Load API keys from .env ──────────────────────────────────
 // Split on the first '=' instead of matching /^(\w+)=/ — \w is ASCII-only, so
-// non-ASCII key names (e.g. RELAY_非线_API_KEY) were silently dropped.
+// non-ASCII key names (e.g. RELAY_中转站_API_KEY) were silently dropped.
 function loadEnv() {
   const env = {};
   if (fs.existsSync(ENV_FILE)) {

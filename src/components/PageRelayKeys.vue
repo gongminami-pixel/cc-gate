@@ -35,10 +35,6 @@ async function saveApiKeys() {
 
 const relayPresets = [
   { name: "OpenRouter",   url: "https://openrouter.ai/api/v1", anthropicUrl: "" },
-  { name: "Groq",         url: "https://api.groq.com/openai/v1", anthropicUrl: "" },
-  { name: "Together AI",  url: "https://api.together.xyz/v1", anthropicUrl: "" },
-  { name: "DeepInfra",   url: "https://api.deepinfra.com/v1", anthropicUrl: "" },
-  { name: "Cloudflare AI",url: "https://api.cloudflare.com/client/v4/accounts", anthropicUrl: "" },
 ];
 
 const editingRelay = ref<{ oldName: string; name: string; url: string; anthropicUrl: string; key: string; masked: boolean }>(
@@ -122,7 +118,7 @@ const apiKeyGroups = [
     <div class="card">
       <div class="card-head">中转站</div>
       <div class="card-body">
-        <p class="desc">添加中转站（OpenRouter / Groq / one-api / new-api 等），首页即可为模型选择直连还是走中转。同一 URL 可用不同 Key 添加多次——改名字区分即可。</p>
+        <p class="desc">添加中转站（OpenRouter 等），首页即可为模型选择直连还是走中转。同一 URL 可用不同 Key 添加多次——改名字区分即可。</p>
 
         <div v-if="config && config.relays.length > 0" class="relay-list">
           <div v-for="r in config.relays" :key="r.name" class="relay-row">

@@ -18,15 +18,24 @@ function aliasShort(slug: string): string {
 
 const codexAliases = computed(() => {
   const slugs = props.config?.agent_models?.["codex_cli"] ?? [];
-  return slugs.map(s => ({ alias: `codex-${aliasShort(s)}`, model: s, tool: "Codex CLI" }));
+  return [
+    { alias: "codex", model: "原生 · 官方 OpenAI", tool: "Codex CLI" },
+    ...slugs.map(s => ({ alias: `codex-${aliasShort(s)}`, model: s, tool: "Codex CLI" })),
+  ];
 });
 const claudeAliases = computed(() => {
   const slugs = props.config?.agent_models?.["claude_cli"] ?? [];
-  return slugs.map(s => ({ alias: `claude-${aliasShort(s)}`, model: s, tool: "Claude Code CLI" }));
+  return [
+    { alias: "claude", model: "原生 · 官方 Anthropic", tool: "Claude Code CLI" },
+    ...slugs.map(s => ({ alias: `claude-${aliasShort(s)}`, model: s, tool: "Claude Code CLI" })),
+  ];
 });
 const aiderAliases = computed(() => {
   const slugs = props.config?.agent_models?.["aider"] ?? [];
-  return slugs.map(s => ({ alias: `aider-${aliasShort(s)}`, model: s, tool: "Aider CLI" }));
+  return [
+    { alias: "aider", model: "原生 · 官方默认", tool: "Aider CLI" },
+    ...slugs.map(s => ({ alias: `aider-${aliasShort(s)}`, model: s, tool: "Aider CLI" })),
+  ];
 });
 const allAliases = computed(() => [...codexAliases.value, ...claudeAliases.value, ...aiderAliases.value]);
 
@@ -99,6 +108,7 @@ onMounted(async () => { try { shellInfo.value = await getShellInfo(); } catch {}
     <div class="card mt12">
       <div class="card-head">用法</div>
       <div class="card-body">
+        <div class="usage-item"><code>codex / claude / aider</code><span>无后缀 = 官方原生调用（不经过本地代理）</span></div>
         <div class="usage-item"><code>codex-ds</code><span>Codex CLI · DeepSeek V4 Pro</span></div>
         <div class="usage-item"><code>claude-glm</code><span>Claude Code CLI · GLM-5.2</span></div>
         <div class="usage-item"><code>aider-mimo</code><span>Aider CLI · MiMo V2.5 Pro</span></div>

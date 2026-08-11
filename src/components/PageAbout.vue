@@ -109,8 +109,7 @@ async function copyDiag() {
           <div class="feature-icon">🌐</div>
           <div class="feature-title">中转站配置</div>
           <div class="feature-detail">
-            内置 OpenRouter / Groq / Together / DeepInfra / Cloudflare
-            预设，快速填入 API 地址
+            内置 OpenRouter 预设，快速填入 API 地址
           </div>
         </div>
       </div>

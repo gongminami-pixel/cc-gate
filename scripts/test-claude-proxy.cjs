@@ -61,10 +61,10 @@ function makeFakeHome() {
   fs.copyFileSync(PROXY_SRC, path.join(dir, 'claude-proxy.js'));
 
   // Non-ASCII key name — the old /^(\w+)=/ regex silently dropped this line.
-  // RELAY_X975EX7EBF_API_KEY is relay_env_key("非线") in the Rust writer.
+  // RELAY_X4E2DX8F6CX7AD9_API_KEY is relay_env_key("中转站") in the Rust writer.
   fs.writeFileSync(path.join(dir, '.env'), [
     '# comment line',
-    'RELAY_X975EX7EBF_API_KEY=relay-cjk-key',
+    'RELAY_X4E2DX8F6CX7AD9_API_KEY=relay-cjk-key',
     'RELAY_NL_API_KEY=relay-nl-key',
     'DEEPSEEK_API_KEY=ds-key',
     'HAS_EQUALS_IN_VALUE=abc=def==',
@@ -77,7 +77,7 @@ function makeFakeHome() {
       {
         // Relay serving a model literally named claude-opus-5 — Bug 1's victim.
         id: 'anthropic-relay-nl', name: 'NL Relay', baseUrl: base,
-        envKey: 'RELAY_X975EX7EBF_API_KEY', defaultModel: 'claude-opus-5',
+        envKey: 'RELAY_X4E2DX8F6CX7AD9_API_KEY', defaultModel: 'claude-opus-5',
         anthropicEndpoint: true, anthropicModel: 'claude-opus-5',
         anthropicVersion: '2099-01-01',
         models: [{ id: 'claude-opus-5', displayName: 'NL Opus 5' }],
