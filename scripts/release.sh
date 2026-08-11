@@ -10,10 +10,10 @@ if [ -z "$TOKEN" ]; then
 fi
 
 REPO="gongminami-pixel/cc-gate"
-TAG="v0.1.2"
-VERSION="0.1.2"
-DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.2_x64.dmg"
-EXE="src-tauri/target/x86_64-pc-windows-msvc/release/cc-gate.exe"
+TAG="v0.1.16"
+VERSION="0.1.16"
+DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.16_x64.dmg"
+EXE="/tmp/CC-Gate_0.1.16_x64-setup.exe"
 MAC_SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
 WIN_SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
 
@@ -42,7 +42,7 @@ body = """## Download
 | Platform | File | SHA256 |
 |----------|------|--------|
 | macOS | [CC-Gate_${VERSION}_x64.dmg](https://github.com/${REPO}/releases/download/${TAG}/CC-Gate_${VERSION}_x64.dmg) | \`${MAC_SHA}\` |
-| Windows | [cc-gate.exe](https://github.com/${REPO}/releases/download/${TAG}/cc-gate.exe) | \`${WIN_SHA}\` |
+| Windows | [CC-Gate_${VERSION}_x64-setup.exe](https://github.com/${REPO}/releases/download/${TAG}/CC-Gate_${VERSION}_x64-setup.exe) | \`${WIN_SHA}\` |
 
 ### Verify
 
@@ -50,17 +50,17 @@ body = """## Download
 # macOS
 shasum -a 256 CC-Gate_${VERSION}_x64.dmg
 # Windows (PowerShell)
-Get-FileHash cc-gate.exe -Algorithm SHA256
+Get-FileHash CC-Gate_${VERSION}_x64-setup.exe -Algorithm SHA256
 \`\`\`
 
-### Changes
+### Changes (v0.1.16)
 
-- Tool detection with progressive loading (one-by-one live status)
-- Claude Opus 4.5 → Opus 5 (context 200K → 1M)
-- GPT-5.1 Codex → GPT-5.6
-- GLM-5.2 context 128K → 1M
-- Remote model catalog auto-update (models-catalog.json from GitHub)
-- README with open-source documentation
+- 无后缀 alias（codex / claude / aider）= 官方原生调用（codex→官方 OpenAI gpt-5.5，claude→api.anthropic.com，aider→裸命令）；带后缀 alias 仍走本地代理
+- 移除非线智能中转（代码/注释/测试全清），providers.json 仅剩 4 个官方直连 provider（DeepSeek / GLM / Qwen / MiMo）
+- 快速添加中转弹窗预设只留 OpenRouter
+- Shell 集成页别名列表新增原生条目展示
+- 代理层修复：count_tokens 端点 + isAnthropicNative 检测
+- 新增回归测试（原生/代理 alias 生成断言）与无 GUI 应用配置工具
 """
 print(json.dumps({"tag_name": "${TAG}", "name": "CC-Gate ${TAG}", "body": body, "draft": False}))
 PYEOF
@@ -83,11 +83,11 @@ curl -sS -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
   "$UPLOAD_URL?name=CC-Gate_${VERSION}_x64.dmg" > /dev/null
 echo "  OK"
 
-# Upload Windows exe
-echo "Uploading Windows exe ($(ls -lh "$EXE" | awk '{print $5}'))..."
+# Upload Windows setup exe
+echo "Uploading Windows setup exe ($(ls -lh "$EXE" | awk '{print $5}'))..."
 curl -sS -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
   --data-binary "@$EXE" \
-  "$UPLOAD_URL?name=cc-gate.exe" > /dev/null
+  "$UPLOAD_URL?name=CC-Gate_${VERSION}_x64-setup.exe" > /dev/null
 echo "  OK"
 
 echo ""

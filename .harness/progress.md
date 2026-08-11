@@ -379,3 +379,9 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: 落 waypoint + 重写 handoff（v0.1.13 Release + 三个未提交改动 + HEAD 漂移修正）
 - **outcome**: L2 完整反映 v0.1.13 状态
 - **next**: git 本地提交 .harness/ + 源码改动 + push
+
+## 2026-08-11T09:12:49+07:00 — handoff_ready: 0.1.16 双端构建 + 发布（同步记忆）
+- **touched**: .harness/waypoints/2026-08-11T02-12-49+00:00.md .harness/handoff.md .harness/progress.md
+- **action**: 落 waypoint + 重写 handoff（0.1.16 发布进行时；0.1.15 → 0.1.16 bump；macOS DMG 已完成，Windows 构建中）
+- **outcome**: L2 完整反映 0.1.16 发布状态
+- **next**: Windows 构建 → 双包 SHA256 → release.sh 发布 → 提交 + push
