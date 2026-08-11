@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工具检测技术文档</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #0d1117; color: #c9d1d9; padding: 40px; max-width: 960px; margin: auto; }
+  h1 { color: #58a6ff; font-size: 28px; margin-bottom: 8px; }
+  .meta { color: #8b949e; font-size: 14px; margin-bottom: 32px; }
+  h2 { color: #f0f6fc; font-size: 20px; border-bottom: 1px solid #30363d; padding-bottom: 6px; margin: 32px 0 16px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  th, td { padding: 10px 14px; text-align: left; border: 1px solid #30363d; }
+  th { background: #161b22; color: #f0f6fc; font-weight: 600; }
+  td { background: #0d1117; }
+  .ok { color: #3fb950; font-weight: bold; }
+  .fail { color: #f85149; font-weight: bold; }
+  pre { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 16px; overflow-x: auto; margin: 12px 0; }
+  code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 13px; color: #d2a8ff; }
+  .cmd { color: #79c0ff; }
+  .out { color: #a5d6ff; }
+  .note { background: #1f2329; border-left: 3px solid #58a6ff; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
+  .note strong { color: #58a6ff; }
+  p, li { line-height: 1.8; }
+  ul { margin: 8px 0 8px 24px; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #30363d; color: #8b949e; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>🛠 本机开发工具检测 — 技术文档</h1>
+<p class="meta">检测时间：2026-07-27 &nbsp;|&nbsp; 检测环境：Windows 10 + Git Bash (MSYS2) &nbsp;|&nbsp; 检测者：Hermes Agent</p>
+
+<h2>一、检测方法总览</h2>
+<p>所有检测均通过 <code>terminal</code> 工具在 Git Bash (MSYS2) 环境中执行。核心原理：调用各工具的 <code>--version</code> 标志，根据退出码（exit code）和标准输出（stdout）判断安装状态。</p>
+
+<table>
+  <tr>
+    <th>工具</th><th>检测命令</th><th>判断依据</th>
+  </tr>
+  <tr>
+    <td>Node.js</td>
+    <td><code>node --version</code></td>
+    <td>exit=0 + stdout 含版本号</td>
+  </tr>
+  <tr>
+    <td>npm</td>
+    <td><code>npm --version</code></td>
+    <td>exit=0 + stdout 含版本号</td>
+  </tr>
+  <tr>
+    <td>Codex CLI</td>
+    <td><code>codex --version</code></td>
+    <td>exit=0 + stdout 含版本号</td>
+  </tr>
+  <tr>
+    <td>Claude CLI</td>
+    <td><code>claude --version</code></td>
+    <td>exit≠0 → "command not found"</td>
+  </tr>
+  <tr>
+    <td>Aider</td>
+    <td><code>aider --version</code></td>
+    <td>exit≠0 → "command not found"</td>
+  </tr>
+  <tr>
+    <td>Shell (Bash)</td>
+    <td><code>bash --version</code></td>
+    <td>exit=0 + stdout 含 GNU bash 标识</td>
+  </tr>
+  <tr>
+    <td>Python</td>
+    <td><code>python --version</code></td>
+    <td>exit=0 + stdout 含版本号</td>
+  </tr>
+</table>
+
+<h2>二、逐工具详细解析</h2>
+
+<h3>1. Node.js</h3>
+<pre><code><span class="cmd">$ node --version</span>
+<span class="out">v22.23.1</span></code></pre>
+<div class="note"><strong>原理：</strong>Node.js 安装后会在系统 PATH 中注册 <code>node.exe</code>。<code>--version</code> 是 Node 内置的标准标志，输出当前 V8 引擎版本号。exit code 为 0 即表示可执行文件存在且能正常响应。</div>
+
+<h3>2. npm</h3>
+<pre><code><span class="cmd">$ npm --version</span>
+<span class="out">10.9.8</span></code></pre>
+<div class="note"><strong>原理：</strong>npm 随 Node.js 一起安装（node 22.x 捆绑 npm 10.x）。<code>npm --version</code> 同样依赖 PATH 中的 <code>npm</code> 可执行文件。npm 实际是一个 Node.js 脚本，由 <code>node.exe</code> 解释执行。</div>
+
+<h3>3. Codex CLI</h3>
+<pre><code><span class="cmd">$ codex --version</span>
+<span class="out">codex-cli 0.142.2</span></code></pre>
+<div class="note"><strong>原理：</strong>Codex CLI（OpenAI 出品）通过 npm 全局安装：<code>npm install -g @openai/codex</code>。安装后在 npm 全局 bin 目录下创建 <code>codex</code> 可执行文件，该目录已加入 PATH。检测时用 <code>codex --version</code> 直接输出版本。</div>
+
+<h3>4. Claude CLI</h3>
+<pre><code><span class="cmd">$ claude --version</span>
+<span class="out">bash: claude: command not found</span></code></pre>
+<div class="note"><strong>原理：</strong>Shell 在 PATH 的所有目录中搜索名为 <code>claude</code> 的可执行文件，未找到则返回 "command not found"，exit code 127。这明确表示 Claude CLI 未安装。补充检测 <code>claude-code</code> 别名同样不存在。</div>
+
+<h3>5. Aider</h3>
+<pre><code><span class="cmd">$ aider --version</span>
+<span class="out">bash: aider: command not found</span></code></pre>
+<div class="note"><strong>原理：</strong>Aider 是 Python 包，通常通过 <code>pip install aider-chat</code> 或 <code>uv tool install aider-chat</code> 安装。检测时在 PATH 中搜索 <code>aider</code> 可执行文件。未找到则判定未安装。pip list 中也不存在 aider 相关包。</div>
+
+<h3>6. Shell (Bash)</h3>
+<pre><code><span class="cmd">$ bash --version | head -1</span>
+<span class="out">GNU bash, version 5.3.9(1)-release (x86_64-pc-cygwin)</span></code></pre>
+<div class="note"><strong>原理：</strong><code>bash</code> 是当前会话的 Shell 解释器。本机安装的是 Git for Windows 自带的 MSYS2 Bash (Cygwin 编译版)。<code>--version</code> 输出 GNU Bash 的完整版本信息。</div>
+
+<h3>7. Python</h3>
+<pre><code><span class="cmd">$ python --version</span>
+<span class="out">Python 3.11.15</span></code></pre>
+<div class="note"><strong>原理：</strong>Python 安装后在 PATH 中注册 <code>python.exe</code>。<code>--version</code> 直接输出版本。注意本机仅安装了 <code>python</code>（非 <code>python3</code> 别名），<code>python3</code> 命令不可用。pip 不可用，但 <code>uv</code>（Rust 写的 Python 包管理器）已安装，可作为替代。</div>
+
+<h2>三、最终结果汇总</h2>
+
+<table>
+  <tr><th>工具</th><th>状态</th><th>版本</th><th>检测方法</th></tr>
+  <tr><td>Node.js</td><td class="ok">✅ 已安装</td><td>v22.23.1</td><td>PATH 可执行文件 + --version</td></tr>
+  <tr><td>npm</td><td class="ok">✅ 已安装</td><td>10.9.8</td><td>PATH 可执行文件 + --version</td></tr>
+  <tr><td>Codex CLI</td><td class="ok">✅ 已安装</td><td>0.142.2</td><td>PATH 可执行文件 + --version</td></tr>
+  <tr><td>Claude CLI</td><td class="fail">❌ 未安装</td><td>—</td><td>command not found (exit 127)</td></tr>
+  <tr><td>Aider</td><td class="fail">❌ 未安装</td><td>—</td><td>command not found (exit 127)</td></tr>
+  <tr><td>Shell (Bash)</td><td class="ok">✅ 已安装</td><td>5.3.9 (MSYS2)</td><td>PATH 可执行文件 + --version</td></tr>
+  <tr><td>Python</td><td class="ok">✅ 已安装</td><td>3.11.15 (Windows)</td><td>PATH 可执行文件 + --version</td></tr>
+</table>
+
+<h2>四、通用检测逻辑</h2>
+<p>所有工具的检测遵循同一套流程：</p>
+<ol>
+  <li><strong>构造命令</strong>：<code>&lt;tool&gt; --version 2&gt;&amp;1</code>（将 stderr 重定向到 stdout 一并捕获）</li>
+  <li><strong>执行命令</strong>：在 Bash 子进程中运行，设置超时（10~15 秒）防止挂起</li>
+  <li><strong>检查结果</strong>：
+    <ul>
+      <li><code>exit_code = 0</code> 且 stdout 不含 "not found" → 已安装，提取版本号</li>
+      <li><code>exit_code ≠ 0</code> 或 stdout 含 "command not found" → 未安装</li>
+      <li>超时 → 可能存在但响应异常，标记为"不确定"</li>
+    </ul>
+  </li>
+  <li><strong>补充验证</strong>（可选）：对疑似未安装的工具，用 <code>which</code>、<code>npx</code> 或包管理器列表做二次确认</li>
+</ol>
+
+<h2>五、注意事项</h2>
+<ul>
+  <li><strong>PATH 环境变量</strong>是检测的关键——工具必须在其安装目录被加入 PATH 后才能被检测到。</li>
+  <li>本机使用 <strong>Git Bash (MSYS2)</strong>，其 PATH 继承 Windows 系统 PATH 并追加 MSYS2 自身路径，因此同时能检测到 Windows 原生程序（如 <code>python.exe</code>）和 MSYS2 程序（如 <code>bash</code>）。</li>
+  <li>部分工具可能安装在用户目录下（如 <code>~/bin/</code>、<code>~/AppData/Local/...</code>），若未加入 PATH 则检测不到，需手动指定完整路径。</li>
+  <li><code>pip</code> 不可用但 <code>uv</code> 可用——如需安装 Python 包（如 Aider），应使用 <code>uv tool install</code> 或 <code>uv pip install</code>。</li>
+</ul>
+
+<footer>Generated by Hermes Agent · 2026-07-27</footer>
+
+</body>
+</html>

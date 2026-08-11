@@ -604,6 +604,27 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Count tokens — Claude Code uses this for context window management.
+  // Return a rough estimate (char count / 2) so Claude Code doesn't hang.
+  if (req.method === 'POST' && req.url.startsWith('/v1/messages/count_tokens')) {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      try {
+        const parsed = JSON.parse(body);
+        const text = JSON.stringify(parsed.messages || []) + (parsed.system || '');
+        // Rough estimate: ~2 chars per token for Chinese/English mixed text
+        const estimated = Math.max(1, Math.ceil(text.length / 2));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ input_tokens: estimated }));
+      } catch {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ input_tokens: 100 }));
+      }
+    });
+    return;
+  }
+
   if (req.method !== 'POST' || !req.url.startsWith('/v1/messages')) {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(errorResponse(404, 'Not found')));
@@ -645,7 +666,7 @@ const server = http.createServer(async (req, res) => {
     // Claude's own models go directly to api.anthropic.com with the client's OAuth token.
     // Gated on !provider: any provider (incl. a third-party relay) that configures a
     // claude-* model must win over this built-in, or its key is sent to Anthropic → 401.
-    const isAnthropicNative = !provider && /^claude-(opus|sonnet|haiku|fable)-/.test(realModelId);
+    const isAnthropicNative = !provider && /^claude-(opus|sonnet|haiku|fable)-/.test(modelId);
     if (isAnthropicNative) {
       const clientKey = authHeader || 'no-key';
       const nativeHeaders = { 'x-api-key': clientKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' };

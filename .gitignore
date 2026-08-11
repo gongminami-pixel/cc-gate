@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 src-tauri/target/
+src-tauri/.xwin-cache/
+src-tauri/gen/
 dist/
 
 # IDE
