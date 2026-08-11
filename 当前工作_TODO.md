@@ -15,6 +15,7 @@
   - 删掉仪表盘，侧边栏：首页 / 模型定义 / Shell / 用量 / 设置
 - [x] Phase 5: 打包发布 ✅ (2026-08,已发 0.1.10 → 0.1.15 多个 GitHub Release,macOS DMG + Windows NSIS 双端)
 - [x] 代理层 Bug 收尾 ✅ (count_tokens 端点、isAnthropicNative 检测、anthropicEndpoint 路由,commit 6c3cfb6)
+- [x] 去非线智能 + 无后缀 alias 官方原生 ✅ (commit 20e1e89:codex/claude/aider 原生,providers.json 仅 4 官方直连,中转预设只留 OpenRouter)
 - [ ] 正式 1.0:补自动化测试覆盖 config_writer/UI 层、发布流程脚本化收尾、文档同步
 
 ## 关键决策
