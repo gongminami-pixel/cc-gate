@@ -13,7 +13,9 @@
   - 10 个 Agent：Codex CLI/桌面端、Claude CLI/桌面端、Hermes、OpenCode、OpenClaw、Aider、Cursor、Reasonix
   - "应用"按钮：统一写入配置文件 + 自动重启代理
   - 删掉仪表盘，侧边栏：首页 / 模型定义 / Shell / 用量 / 设置
-- [ ] Phase 5: 打包发布
+- [x] Phase 5: 打包发布 ✅ (2026-08,已发 0.1.10 → 0.1.15 多个 GitHub Release,macOS DMG + Windows NSIS 双端)
+- [x] 代理层 Bug 收尾 ✅ (count_tokens 端点、isAnthropicNative 检测、anthropicEndpoint 路由,commit 6c3cfb6)
+- [ ] 正式 1.0:补自动化测试覆盖 config_writer/UI 层、发布流程脚本化收尾、文档同步
 
 ## 关键决策
 
