@@ -10,10 +10,10 @@ if [ -z "$TOKEN" ]; then
 fi
 
 REPO="gongminami-pixel/cc-gate"
-TAG="v0.1.17"
-VERSION="0.1.17"
-DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.17_x64.dmg"
-EXE="/tmp/CC-Gate_0.1.17_x64-setup.exe"
+TAG="v0.1.18"
+VERSION="0.1.18"
+DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.18_x64.dmg"
+EXE="/tmp/CC-Gate_0.1.18_x64-setup.exe"
 MAC_SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
 WIN_SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
 
@@ -52,6 +52,14 @@ shasum -a 256 CC-Gate_${VERSION}_x64.dmg
 # Windows (PowerShell)
 Get-FileHash CC-Gate_${VERSION}_x64-setup.exe -Algorithm SHA256
 \`\`\`
+
+### Changes (v0.1.18)
+
+- 新增：OpenCode 配置写入（write_opencode_config）—— 自动写 ~/.config/opencode/opencode.jsonc 的 ccgate provider（chat-proxy 8690），默认模型指向 ccgate
+- 修复：OpenClaw / OpenCode 代理状态检测假阴性 —— is_agent_proxied 改为按实际写入格式检测（models.providers.ccgate / provider.ccgate），UI 不再误报"未代理"
+- 修复：codex config 重写保留用户 [projects.*]（信任目录）与 [mcp_servers.*]（MCP 服务器）段，不再整文件覆盖清空
+- 修复：JSONC/JSON5 解析改用手写 lenient 剥离器 → 官方 json5 crate（行级剥离会误删必需分隔逗号）
+- 新增回归测试：preserve_user_sections / jsonc_lenient / full_apply_all_agents_proxied（gated，9 agent 全 proxied 断言）
 
 ### Changes (v0.1.17)
 

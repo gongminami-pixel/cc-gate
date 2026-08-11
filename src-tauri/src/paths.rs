@@ -129,8 +129,9 @@ pub fn hermes_config_yaml() -> PathBuf {
     home().join(".hermes/config.yaml")
 }
 
-pub fn opencode_config_toml() -> PathBuf {
-    home().join(".config/opencode/config.toml")
+pub fn opencode_config_path() -> PathBuf {
+    // opencode 实际读 ~/.config/opencode/opencode.jsonc（JSONC），不是 config.toml
+    home().join(".config/opencode/opencode.jsonc")
 }
 
 pub fn openclaw_config_json() -> PathBuf {

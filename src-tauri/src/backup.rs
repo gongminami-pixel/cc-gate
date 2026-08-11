@@ -81,7 +81,7 @@ fn agent_config_target(agent: &crate::types::AgentMeta) -> Option<(PathBuf, &'st
         ClaudeCli | ClaudeDesktop => Some((paths::claude_settings_json(), "claude_settings.json")),
         Hermes => Some((paths::hermes_config_yaml(), "hermes_config.yaml")),
         OpenClaw => Some((paths::openclaw_config_json(), "openclaw_config.json")),
-        OpenCode => Some((paths::opencode_config_toml(), "opencode_config.toml")),
+        OpenCode => Some((paths::opencode_config_path(), "opencode_config.jsonc")),
         Aider | Cursor => Some((paths::zshrc(), "zshrc")),
     }
 }
@@ -99,6 +99,13 @@ pub fn ensure_all_backups() {
             }
         }
     }
+}
+
+/// JSONC/JSON5-lenient parse via the `json5` crate: handles `//` comments and
+/// trailing commas (a proper parser — a naive line-based stripper can't tell a
+/// trailing comma from a required separator comma like `"a": {...},`).
+pub(crate) fn parse_jsonc_lenient(src: &str) -> Option<serde_json::Value> {
+    json5::from_str::<serde_json::Value>(src).ok()
 }
 
 /// Check whether a given agent's config currently has CC-Gate proxy settings.
@@ -126,13 +133,19 @@ pub fn is_agent_proxied(agent: &crate::types::AgentMeta) -> bool {
         OpenClaw => {
             let path = paths::openclaw_config_json();
             if let Ok(content) = fs::read_to_string(&path) {
-                content.contains("\"id\":\"ccgate\"") || content.contains("\"id\": \"ccgate\"")
+                // 实际写入格式: models.providers.ccgate (map key)，不是 "id":"ccgate"
+                serde_json::from_str::<serde_json::Value>(&content)
+                    .map(|v| v.pointer("/models/providers/ccgate").is_some())
+                    .unwrap_or(false)
             } else { false }
         }
         OpenCode => {
-            let path = paths::opencode_config_toml();
+            let path = paths::opencode_config_path();
             if let Ok(content) = fs::read_to_string(&path) {
-                content.contains("[model_providers.ccgate]")
+                // opencode.jsonc 可能是 JSONC(带注释)，lenient 清理后解析
+                parse_jsonc_lenient(&content)
+                    .map(|v| v.pointer("/provider/ccgate").is_some())
+                    .unwrap_or(false)
             } else { false }
         }
         Aider | Cursor => {

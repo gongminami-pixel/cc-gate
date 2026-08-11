@@ -257,7 +257,33 @@ wire_api = "responses"
 requires_openai_auth = false
 "#);
 
+    // Preserve user's [projects.*] (trusted dirs) and [mcp_servers.*] sections from the
+    // existing config.toml — wholesale replacement would silently wipe them.
+    let content = preserve_user_sections(&paths::codex_config_toml(), &content, &["projects", "mcp_servers"]);
+
     write_if_changed(&paths::codex_config_toml(), &content)
+}
+
+/// Append `[projects.*]` / `[mcp_servers.*]` sections from an existing TOML file to
+/// newly generated content, so user-managed sections survive a config rewrite.
+fn preserve_user_sections(existing_path: &std::path::Path, generated: &str, keys: &[&str]) -> String {
+    let Ok(src) = std::fs::read_to_string(existing_path) else { return generated.to_string(); };
+    let Ok(doc) = src.parse::<toml::Table>() else { return generated.to_string(); };
+
+    let mut extra = String::new();
+    for key in keys {
+        if let Some(val) = doc.get(*key) {
+            // Wrap in a temp table so the serializer emits the full header path
+            // ([projects."/x"], not a bare ["/x"]) — toml::to_string(val) drops the key name.
+            let mut wrapper = toml::Table::new();
+            wrapper.insert((*key).to_string(), val.clone());
+            if let Ok(serialized) = toml::to_string(&wrapper) {
+                extra.push_str(&serialized);
+                extra.push('\n');
+            }
+        }
+    }
+    if extra.is_empty() { generated.to_string() } else { format!("{generated}\n{extra}") }
 }
 
 // ── Model catalog ────────────────────────────────────────────
@@ -693,6 +719,7 @@ fn clean_stale_bat_files() {
 }
     write_hermes_config(cfg)?;
     write_openclaw_config(cfg)?;
+    write_opencode_config(cfg)?;
     tracing::info!("All tool configs written");
     Ok(())
 }
@@ -773,24 +800,8 @@ pub fn write_openclaw_config(cfg: &AppConfig) -> Result<()> {
     let doc: serde_json::Value = if src.trim().is_empty() {
         serde_json::Value::Object(serde_json::Map::new())
     } else {
-        serde_json::from_str(&src).unwrap_or_else(|_| {
-            // Fallback: strip // comments and trailing commas for lenient parse
-            let cleaned = src.lines()
-                .map(|l| {
-                    let trimmed = l.trim_start();
-                    if trimmed.starts_with("//") { return String::new(); }
-                    let l2 = if let Some(pos) = l.find("//") {
-                        let before = &l[..pos];
-                        if before.matches('"').count() % 2 == 0 { before.to_string() } else { l.to_string() }
-                    } else { l.to_string() };
-                    let l3 = l2.trim_end();
-                    if l3.ends_with(',') { l3[..l3.len()-1].to_string() } else { l3.to_string() }
-                })
-                .filter(|l| !l.is_empty())
-                .collect::<Vec<_>>()
-                .join("\n");
-            serde_json::from_str(&cleaned).unwrap_or(serde_json::Value::Object(serde_json::Map::new()))
-        })
+        crate::backup::parse_jsonc_lenient(&src)
+            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()))
     };
 
     let port = cfg.proxy_ports.chat_proxy;
@@ -832,6 +843,58 @@ pub fn write_openclaw_config(cfg: &AppConfig) -> Result<()> {
             providers.insert("ccgate".to_string(), ccgate_provider);
         }
     }
+
+    let out = serde_json::to_string_pretty(&map)? + "\n";
+    write_if_changed(&path, &out)
+}
+
+/// Write opencode config (~/.config/opencode/opencode.jsonc): merge a `ccgate`
+/// provider (chat-proxy port) into the existing JSONC doc and point the default
+/// model at it. Preserves any other providers (e.g. built-in zhipuai).
+pub fn write_opencode_config(cfg: &AppConfig) -> Result<()> {
+    let slugs: Vec<String> = cfg.agent_models
+        .get("opencode").cloned().unwrap_or_default();
+    if slugs.is_empty() { return Ok(()); }
+
+    let path = paths::opencode_config_path();
+    let src = if path.exists() { fs::read_to_string(&path).unwrap_or_default() } else { String::new() };
+
+    let doc: serde_json::Value = if src.trim().is_empty() {
+        serde_json::Value::Object(serde_json::Map::new())
+    } else {
+        crate::backup::parse_jsonc_lenient(&src)
+            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()))
+    };
+
+    let port = cfg.proxy_ports.chat_proxy;
+    let default_model = slugs.first().cloned().unwrap();
+
+    // provider.ccgate = { npm, name, options{baseURL, apiKey}, models{slug:{name}} }
+    let mut models_map = serde_json::Map::new();
+    for slug in &slugs {
+        let name = cfg.models.iter()
+            .find(|d| &d.slug == slug)
+            .map(|m| m.display_name.clone())
+            .unwrap_or_else(|| slug.clone());
+        models_map.insert(slug.clone(), serde_json::json!({ "name": name }));
+    }
+    let ccgate_provider = serde_json::json!({
+        "npm": "@ai-sdk/openai-compatible",
+        "name": "CC-Gate",
+        "options": {
+            "baseURL": format!("http://127.0.0.1:{port}/v1"),
+            "apiKey": "cc-gate-local",
+        },
+        "models": models_map,
+    });
+
+    let mut map = if let serde_json::Value::Object(m) = doc { m } else { serde_json::Map::new() };
+    // provider (opencode uses singular "provider")
+    if let serde_json::Value::Object(ref mut providers) = map.entry("provider".to_string()).or_insert(serde_json::json!({})) {
+        providers.insert("ccgate".to_string(), ccgate_provider);
+    }
+    // model = "ccgate/<default>"
+    map.insert("model".to_string(), serde_json::json!(format!("ccgate/{default_model}")));
 
     let out = serde_json::to_string_pretty(&map)? + "\n";
     write_if_changed(&path, &out)
@@ -974,6 +1037,62 @@ mod tests {
         super::write_providers(&cfg).expect("write providers.json");
         super::write_shell_aliases(&cfg).expect("write shell aliases");
         eprintln!("MANUAL-APPLY-OK");
+    }
+
+    #[test]
+    fn preserve_user_sections_keeps_projects_and_mcp() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("ccgate-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        let mut f = std::fs::File::create(&path).unwrap();
+        // Existing config with user-managed sections that must survive a rewrite.
+        write!(f, "model = \"old\"\n\n[projects.\"/Users/ami/code\"]\ntrust_level = \"trusted\"\n\n[mcp_servers.node_repl]\ntype = \"stdio\"\ncommand = \"/x/node_repl\"\n\n[mcp_servers.node_repl.env]\nA = \"1\"\n").unwrap();
+        drop(f);
+
+        let generated = "model_provider = \"custom\"\nmodel = \"new\"\n[model_providers.custom]\nname = \"CC-Gate\"\n";
+        let merged = super::preserve_user_sections(&path, generated, &["projects", "mcp_servers"]);
+
+        assert!(merged.contains("[projects.\"/Users/ami/code\"]"), "projects must survive:\n{merged}");
+        assert!(merged.contains("trust_level = \"trusted\""));
+        assert!(merged.contains("[mcp_servers.node_repl]"), "mcp_servers must survive:\n{merged}");
+        assert!(merged.contains("command = \"/x/node_repl\""));
+        assert!(merged.contains("[mcp_servers.node_repl.env]"), "nested mcp env table must survive:\n{merged}");
+        assert!(merged.contains("A = \"1\""));
+        assert!(merged.contains("model_provider = \"custom\""), "generated core must stay:\n{merged}");
+        // Parse round-trip must stay valid TOML.
+        let doc = merged.parse::<toml::Table>().expect("merged output must be valid TOML");
+        assert!(doc.contains_key("projects") && doc.contains_key("mcp_servers"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn jsonc_lenient_parses_comments_and_trailing_commas() {
+        // Realistic JSONC: // comments + trailing commas at line ends (not inline).
+        let src = "{\n  // opencode config\n  \"model\": \"ccgate/x\",\n  \"provider\": {\n    \"ccgate\": {\n      \"name\": \"CC-Gate\"\n    },\n  },\n}\n";
+        let v = crate::backup::parse_jsonc_lenient(src).expect("JSONC must parse");
+        assert_eq!(v.pointer("/provider/ccgate/name").and_then(|x| x.as_str()), Some("CC-Gate"));
+        // Detection path: /provider/ccgate must be found for opencode.
+        assert!(v.pointer("/provider/ccgate").is_some());
+    }
+
+    /// Full headless "Apply" regression: write ALL tool configs, then every agent
+    /// must report proxied (including OpenClaw and OpenCode, the previously
+    /// false-negative pair). Gated — only runs when CCGATE_FULL_TEST=1.
+    #[test]
+    fn full_apply_all_agents_proxied() {
+        if std::env::var("CCGATE_FULL_TEST").is_err() { return; }
+        let cfg = crate::config_store::load().expect("load ~/.CC-Gate/config.json");
+        super::write_all_tool_configs(&cfg).expect("write all tool configs");
+        let agents = crate::types::agent_list();
+        let status: Vec<String> = agents.iter()
+            .map(|a| format!("{}={}", a.name, crate::backup::is_agent_proxied(a)))
+            .collect();
+        eprintln!("APPLIED: {}", status.join(" | "));
+        for a in &agents {
+            assert!(crate::backup::is_agent_proxied(a), "agent {} must be proxied after apply", a.name);
+        }
+        eprintln!("FULL-APPLY-ALL-PROXIED-OK");
     }
 }
 
