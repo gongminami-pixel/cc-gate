@@ -61,7 +61,7 @@
 | `~/.mimo2codex/providers.json` | 供应商/模型路由配置 | cc-x-llm 写，3 个代理都读 |
 | `~/.mimo2codex/.env` | 各厂商 API 密钥 | cc-x-llm 写，3 个代理都读 |
 | `~/.codex/config.toml` | Codex CLI/桌面端配置（base_url→8688） | cc-x-llm 写，Codex 读 |
-| `~/.codex/cc-switch-model-catalog.json` | 模型目录（所有可用模型的定义） | cc-x-llm 写，Codex 桌面端 `/model` 读 |
+| `~/.codex/cc-gate-model-catalog.json` | 模型目录（所有可用模型的定义） | cc-x-llm 写，Codex 桌面端 `/model` 读 |
 | `~/.claude/settings.json` | Claude Code 配置（base_url→8689） | cc-x-llm 写，Claude 读 |
 | `~/.zshrc` | Shell alias（codex-ds/claude-ds 等） | cc-x-llm 写 |
 | `~/.hermes/config.yaml` | Hermes Agent 配置（base_url→8690） | cc-x-llm 写，Hermes 读 |
@@ -75,7 +75,7 @@ CC Switch 是一个菜单栏 GUI 应用，核心功能：
 
 1. **供应商管理** — 在 SQLite 数据库中存储多个供应商配置（API URL、密钥、模型目录）
 2. **配置同步** — 把当前激活的供应商配置写入 `config.toml` 和模型目录文件
-3. **模型目录维护** — 维护 `cc-switch-model-catalog.json`，控制 `/model` 菜单显示哪些模型
+3. **模型目录维护** — 维护 `cc-gate-model-catalog.json`，控制 `/model` 菜单显示哪些模型
 4. **用量统计** — 内置代理（端口 15721）拦截请求，记录 token 和费用
 5. **健康检查** — stream check、provider health 监控
 
@@ -92,7 +92,7 @@ CC Switch 是一个菜单栏 GUI 应用，核心功能：
 #### (B) 推理强度缺少 xhigh（显示只有 3 级而非 5 级）
 - 原因：`supported_reasoning_levels` 中 `effort` 用了 `"max"`
 - 解决：OpenAI 桌面端只认 `"xhigh"`（参考 `~/.codex/models_cache.json` OpenAI 官方缓存）
-- 需同时更新 `cc-switch-model-catalog.json` 文件和 CC Switch DB 中的 modelCatalog
+- 需同时更新 `cc-gate-model-catalog.json` 文件和 CC Switch DB 中的 modelCatalog
 - 5 级应为：`none`, `low`, `medium`, `high`, `xhigh`
 
 #### (C) Claude Code 只接受 `claude-` 前缀的模型 ID
@@ -116,7 +116,7 @@ CC Switch 是一个菜单栏 GUI 应用，核心功能：
 
 #### (G) CC Switch 数据库字段名 vs 文件字段名
 - CC Switch DB 的 modelCatalog：`model`（不是 `slug`）、`displayName`（不是 `display_name`）
-- `cc-switch-model-catalog.json` 文件：`slug`、`display_name`
+- `cc-gate-model-catalog.json` 文件：`slug`、`display_name`
 - 桌面端可能读任意一个来源
 
 #### (H) mimo2codex provider ID 冲突
@@ -145,7 +145,7 @@ model = "deepseek-v4-pro"          # 默认模型
 model_reasoning_effort = "high"
 model_context_window = 1000000
 model_max_output_tokens = 393216
-model_catalog_json = "cc-switch-model-catalog.json"
+model_catalog_json = "cc-gate-model-catalog.json"
 
 [model_providers.custom]
 name = "cc-x-llm"                   # 供应商名字，随便
@@ -159,7 +159,7 @@ requires_openai_auth = true
 - `model_catalog_json` 指向包含全部模型的目录文件
 - `requires_openai_auth = true` 桌面端需要
 
-#### (b) `~/.codex/cc-switch-model-catalog.json`（模型目录）
+#### (b) `~/.codex/cc-gate-model-catalog.json`（模型目录）
 
 需要包含全部 4 个厂商的模型，每个模型完整字段：
 
@@ -342,7 +342,7 @@ chat-proxy 是最简单的代理——不做协议翻译，纯透传。功能：
 
 #### ChatGPT/Codex 桌面端
 - 读取 `config.toml` → 连接 `base_url`（mimo2codex :8688）
-- `/model` 命令读取 `model_catalog_json` 指向的文件（`cc-switch-model-catalog.json`）
+- `/model` 命令读取 `model_catalog_json` 指向的文件（`cc-gate-model-catalog.json`）
 - 文件包含全部厂商模型 → 用户可选任意模型
 - 切换后，Codex 发新模型名给 mimo2codex → 代理按模型名路由到对应厂商
 - **不需要 CC Switch！** 只要模型目录文件写对了就行
@@ -552,7 +552,7 @@ async function checkBudget(model, estimatedInputTokens) {
 
 2. **模型配置** — 管理模型目录
    - 完整模型库（内置所有厂商模型定义）
-   - 勾选启用的模型才写入 `cc-switch-model-catalog.json`
+   - 勾选启用的模型才写入 `cc-gate-model-catalog.json`
    - 未勾选的模型不在桌面端 `/model` 列表中显示
    - 调整优先级、context window 等参数
    - 一键写入配置文件
@@ -585,7 +585,7 @@ async function checkBudget(model, estimatedInputTokens) {
 cc-x-llm GUI
     │
     ├─ 写文件 ──→ ~/.codex/config.toml
-    │             ~/.codex/cc-switch-model-catalog.json
+    │             ~/.codex/cc-gate-model-catalog.json
     │             ~/.claude/settings.json
     │             ~/.zshrc
     │             ~/.hermes/config.yaml
@@ -606,7 +606,7 @@ cc-x-llm GUI
 
 ### Phase 1：核心配置引擎（无 GUI）
 - 模型定义数据结构（JSON Schema）
-- 写入 `config.toml`、`cc-switch-model-catalog.json`、`settings.json` 的模块
+- 写入 `config.toml`、`cc-gate-model-catalog.json`、`settings.json` 的模块
 - Hermes / OpenCode / OpenClaw 配置写入模块
 - Shell alias 生成/注入模块（Codex Claude Aider 三套）
 - 验证：配置写入后各种工具 CLI 和桌面端正常工作
@@ -648,7 +648,7 @@ cc-x-llm GUI
 | `~/.mimo2codex/.env` | API 密钥存储格式 |
 | `~/.mimo2codex/claude-proxy.js` | Claude Code 代理实现参考 |
 | `~/.codex/config.toml` | Codex 配置文件格式 |
-| `~/.codex/cc-switch-model-catalog.json` | 模型目录完整格式 |
+| `~/.codex/cc-gate-model-catalog.json` | 模型目录完整格式 |
 | `~/.codex/models_cache.json` | OpenAI 官方模型格式参考（推理等级用 xhigh） |
 | `~/.claude/settings.json` | Claude Code 配置文件格式 |
 | `~/.cc-switch/cc-switch.db` | CC Switch 数据库 schema 参考（用量表设计） |

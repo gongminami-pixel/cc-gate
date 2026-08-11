@@ -10,10 +10,10 @@ if [ -z "$TOKEN" ]; then
 fi
 
 REPO="gongminami-pixel/cc-gate"
-TAG="v0.1.16"
-VERSION="0.1.16"
-DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.16_x64.dmg"
-EXE="/tmp/CC-Gate_0.1.16_x64-setup.exe"
+TAG="v0.1.17"
+VERSION="0.1.17"
+DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.17_x64.dmg"
+EXE="/tmp/CC-Gate_0.1.17_x64-setup.exe"
 MAC_SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
 WIN_SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
 
@@ -52,6 +52,13 @@ shasum -a 256 CC-Gate_${VERSION}_x64.dmg
 # Windows (PowerShell)
 Get-FileHash CC-Gate_${VERSION}_x64-setup.exe -Algorithm SHA256
 \`\`\`
+
+### Changes (v0.1.17)
+
+- 修复：codex 模型目录文件名撞车根治 —— `cc-switch-model-catalog.json` → `cc-gate-model-catalog.json`（paths.rs / config_writer.rs / DESIGN.md），与 CC Switch 彻底隔离，不再互相覆盖
+- 新增：合并模型目录生成逻辑验证（codex_cli ∪ codex_desktop 全模型进入切换器）
+- 测试：全链 headless 回归（应用 → 恢复 → 再应用），Aider/Cursor 别名块恢复生效
+- 已知问题：OpenClaw 代理状态检测假阴性（is_agent_proxied 格式不匹配）；OpenCode 配置写入未实现（待下版）
 
 ### Changes (v0.1.16)
 
