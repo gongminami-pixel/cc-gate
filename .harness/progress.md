@@ -390,3 +390,8 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **action**: ①paths.rs codex_model_catalog_json 改 cc-gate-model-catalog.json（根治 CC Switch catalog 文件名撞车）；②config_writer.rs 模板同步；③DESIGN.md 11 处替换；④本机 config.toml 外科手术单行改 + 7 模型合并目录生成（python 脚本按 write_model_catalog 逻辑）；⑤新二进制 tauri build 成功（strings 验证 2/0）+ 安装 /Applications（旧版 .bak 备份）；⑥headless 全链测试（临时 gated test：apply→restore→re-apply 循环，跑完已删）：Aider/Cursor 恢复生效、OpenClaw provider 写入正确；⑦发现 3 问题（.orig 污染 / OpenClaw 检测假阴性 / OpenCode 未实现）；⑧版本 bump 0.1.17 + 双端构建启动
 - **outcome**: 根治落地并验证；测试报告 3 发现已记入 cc-gate skill；macOS/Windows 构建后台进行中
 - **next**: 构建完成 → 双包 SHA256 → release.sh 发布 → commit+tag+push → skill 补发布结果
+## 2026-08-11T11:20:00+07:00 — handoff_ready: 0.1.17 全量更新完成（同步记忆收尾）
+- **touched**: .harness/handoff.md
+- **action**: 重写 handoff（0.1.17 发布完成状态：双包已传、main 已 push、/Applications 已装 0.1.17、SHA256 已更新）
+- **outcome**: L2 完整反映 0.1.17 终态；Next actions 收口为 3 个待用户决策的修复项（OpenClaw 检测 / OpenCode 实现 / write_codex_config 模板合并）
+- **next**: 用户决策后开 0.1.18 任务
