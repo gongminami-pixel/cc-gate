@@ -248,14 +248,13 @@ model = "{default_model}"
 model_reasoning_effort = "high"
 model_context_window = {default_ctxt}
 model_max_output_tokens = {default_max_out}
-model_catalog_json = "cc-gate-model-catalog.json"
+model_catalog_json = "cc-switch-model-catalog.json"
 
 [model_providers.custom]
 name = "CC-Gate"
 base_url = "{base_url}"
 wire_api = "responses"
-requires_openai_auth = false
-"#);
+requires_openai_auth = true"#);
 
     // Preserve user's [projects.*] (trusted dirs) and [mcp_servers.*] sections from the
     // existing config.toml — wholesale replacement would silently wipe them.

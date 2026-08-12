@@ -49,8 +49,8 @@ pub fn codex_config_toml() -> PathBuf {
 }
 
 pub fn codex_model_catalog_json() -> PathBuf {
-    // 用 cc-gate 自己的文件名，避免与 CC Switch 的 cc-switch-model-catalog.json 互相覆盖
-    home().join(".codex/cc-gate-model-catalog.json")
+    // Codex桌面端 /model 菜单只认 cc-switch-model-catalog.json 文件名
+    home().join(".codex/cc-switch-model-catalog.json")
 }
 
 pub fn claude_settings_json() -> PathBuf {
