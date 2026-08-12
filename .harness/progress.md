@@ -404,3 +404,19 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 ## 2026-08-11T11:35:00+07:00 — handoff_ready: 0.1.18 发布完成（同步记忆收尾）
 - **touched**: .harness/handoff.md
 - **action**: 重写 handoff（0.1.18 终态）
+
+## 2026-08-12T20:58:00+08:00 — work: v0.1.18 Release 新包替换（双端 SHA256 更新）
+- **touched**: GitHub Release v0.1.18（`gh release upload` + `gh release edit` 更新 SHA256）
+- **action**: 用户提供两个新构建的安装包 → 删除旧 assets → 上传新包 → 更新 Release body SHA256
+  - macOS: `CC-Gate_0.1.18_x64.dmg` (3.9MB) SHA256: `4c97e3ddff357160cd09a4c4060f17e8a9671f820a70cd483555c60bba1147eb`
+  - Windows: `CC-Gate_0.1.18_x64-setup.exe` (2.9MB) SHA256: `3bacf5a2d45da94e697daee10809512ff35fb431f048756925145547c824065e`
+- **method**: 先 `gh release delete-asset` 删除旧 assets → `gh release upload` 上传新包 → `gh release edit --notes-file` 更新 Release body SHA256
+- **outcome**: Release v0.1.18 双包 + SHA256 全部刷新正确
+- **note**: 工作区有 `config_writer.rs` + `paths.rs` 未提交改动（上次发布残留），待本轮同步提交
+
+## 2026-08-12T20:58:00+08:00 — handoff_ready: 同步加提交（v0.1.18 新包替换）
+- **touched**: .harness/waypoints/2026-08-12T12-58-00+08:00.md .harness/handoff.md .harness/progress.md
+- **action**: 落 waypoint + 重写 handoff（v0.1.18 双包 SHA256 更新 + Release 刷新）
+- **outcome**: L2 完整反映 v0.1.18 新包状态
+- **next**: git 本地提交 .harness/ + 源码改动
+
