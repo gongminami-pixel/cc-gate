@@ -11,7 +11,7 @@ use crate::types::ModelDef;
 
 /// Remote catalog JSON URL (raw GitHub — updated by maintainers when vendors release new models).
 const CATALOG_URL: &str =
-    "https://raw.githubusercontent.com/gongminami-pixel/cc-gate/main/models-catalog.json";
+    "https://raw.githubusercontent.com/gongminami/cc-gate/main/models-catalog.json";
 
 /// Deserialized from `models-catalog.json` hosted on GitHub.
 #[derive(Debug, Clone, Serialize, Deserialize)]

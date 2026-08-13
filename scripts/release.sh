@@ -9,7 +9,7 @@ if [ -z "$TOKEN" ]; then
   echo
 fi
 
-REPO="gongminami-pixel/cc-gate"
+REPO="gongminami/cc-gate"
 TAG="v0.1.20"
 VERSION="0.1.20"
 DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.20_x64.dmg"

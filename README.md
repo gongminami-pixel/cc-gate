@@ -147,7 +147,7 @@ aider-ds        # Aider + DeepSeek V4 Pro
 - pnpm 或 npm
 
 ```bash
-git clone https://github.com/gongminami-pixel/cc-gate.git
+git clone https://github.com/gongminami/cc-gate.git
 cd cc-gate
 npm install
 npx tauri build
