@@ -152,6 +152,9 @@ pub fn builtin_models() -> Vec<ModelDef> {
         ModelDef { slug: "mimo-v2.5".into(),            display_name: "MiMo V2.5".into(),            provider: "xiaomi".into(),    enabled: false, context_window: 1_000_000, max_output_tokens: 16_384,  priority: 1001, default_reasoning_level: "high".into(),   input_price_per_1k: 0.0005, output_price_per_1k: 0.001,  ..Default::default() },
         ModelDef { slug: "claude-opus-5".into(),         display_name: "Claude Opus 5".into(),         provider: "anthropic".into(),  enabled: true,  context_window: 1_000_000, max_output_tokens: 32_768,  priority: 50,   default_reasoning_level: "xhigh".into(),  input_price_per_1k: 0.015,  output_price_per_1k: 0.075,  ..Default::default() },
         ModelDef { slug: "gpt-5.6".into(),               display_name: "GPT-5.6".into(),               provider: "openai".into(),     enabled: true,  context_window: 1_000_000, max_output_tokens: 128_000, priority: 60,   default_reasoning_level: "xhigh".into(),  input_price_per_1k: 0.00125,output_price_per_1k: 0.01,   ..Default::default() },
+        // Gemini 走官方 OpenAI 兼容端点(直连),native_responses=false → 一律经本地代理转 Chat Completions。
+        ModelDef { slug: "gemini-3-flash-preview".into(), display_name: "Gemini 3 Flash Preview".into(), provider: "gemini".into(),     enabled: true,  context_window: 1_048_576, max_output_tokens: 65_536,  priority: 400, default_reasoning_level: "medium".into(), input_price_per_1k: 0.0005, output_price_per_1k: 0.003,  ..Default::default() },
+        ModelDef { slug: "gemini-2.5-pro".into(),        display_name: "Gemini 2.5 Pro".into(),        provider: "gemini".into(),     enabled: true,  context_window: 1_048_576, max_output_tokens: 65_536,  priority: 401, default_reasoning_level: "high".into(),   input_price_per_1k: 0.00125,output_price_per_1k: 0.01,   ..Default::default() },
     ]
 }
 

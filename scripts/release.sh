@@ -10,10 +10,10 @@ if [ -z "$TOKEN" ]; then
 fi
 
 REPO="gongminami-pixel/cc-gate"
-TAG="v0.1.19"
-VERSION="0.1.19"
-DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.19_x64.dmg"
-EXE="/tmp/CC-Gate_0.1.19_x64-setup.exe"
+TAG="v0.1.20"
+VERSION="0.1.20"
+DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.20_x64.dmg"
+EXE="/tmp/CC-Gate_0.1.20_x64-setup.exe"
 MAC_SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
 WIN_SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
 
@@ -52,6 +52,11 @@ shasum -a 256 CC-Gate_${VERSION}_x64.dmg
 # Windows (PowerShell)
 Get-FileHash CC-Gate_${VERSION}_x64-setup.exe -Algorithm SHA256
 \`\`\`
+
+### Changes (v0.1.20)
+
+- 修复：首页切换模型时，复选框 / 路由下拉框变动后「恢复」按钮自动变为「应用」（dirty 检测覆盖路由下拉框与未勾选模型）
+- 重构：版本号单一来源，以 Cargo.toml 为准 —— tauri.conf.json 删 version 自动 fallback，发版只改一处；Sidebar 左下角版本号动态读取
 
 ### Changes (v0.1.19)
 

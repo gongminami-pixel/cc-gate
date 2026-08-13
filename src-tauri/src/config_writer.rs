@@ -31,6 +31,9 @@ const PROVIDER_META: &[ProviderMeta] = &[
     ProviderMeta { id: "xiaomi",    name: "小米MiMo",       base_url: "https://api.xiaomimimo.com/v1",                                                  env_key: "MIMO_API_KEY",     env_key_aliases: &["MINIMAX_API_KEY"], feature: None },
     ProviderMeta { id: "anthropic", name: "Anthropic Opus", base_url: "https://api.anthropic.com",                                                      env_key: "",                 env_key_aliases: &[],                 feature: None },
     ProviderMeta { id: "openai",    name: "OpenAI GPT",     base_url: "https://api.openai.com/v1",                                                      env_key: "",                 env_key_aliases: &[],                 feature: None },
+    // Gemini 官方 OpenAI 兼容端点(原生 GenerateContent 协议由 Google 侧转换成 Chat Completions,
+    // 本地三个代理的 baseUrl + "/chat/completions" 拼接恰好命中 .../v1beta/openai/chat/completions,无需 /v1)。
+    ProviderMeta { id: "gemini",    name: "Google Gemini",  base_url: "https://generativelanguage.googleapis.com/v1beta/openai",                        env_key: "GEMINI_API_KEY",  env_key_aliases: &["GOOGLE_API_KEY"], feature: None },
 ];
 
 fn meta_by_id(id: &str) -> Option<&'static ProviderMeta> {
@@ -916,6 +919,7 @@ fn short(slug: &str) -> &str { match slug {
     "glm-5.2" => "glm", "qwen3.8-max-preview" => "qwen", "qwen-max" => "qwen-max",
     "mimo-v2.5-pro" => "mimo", "mimo-v2.5" => "mimo-v2.5",
     "claude-opus-5" => "opus", "gpt-5.6" => "gpt",
+    "gemini-3-flash-preview" => "gemini-flash", "gemini-2.5-pro" => "gemini-pro",
     _ => slug,
 }}
 fn codex_alias(s: &str) -> String { format!("codex-{}", short(s)) }
@@ -1040,6 +1044,40 @@ mod tests {
 
         // Helpful when eyeballing generated output.
         println!("\n=== generated aliases ===\n{out}");
+    }
+
+    #[test]
+    fn gemini_provider_meta_models_and_aliases() {
+        // 1. PROVIDER_META 直连定义
+        let meta = super::meta_by_id("gemini").expect("gemini must have direct provider meta");
+        assert_eq!(meta.base_url, "https://generativelanguage.googleapis.com/v1beta/openai",
+            "代理拼接 baseUrl + /chat/completions 必须命中 Gemini OpenAI 兼容端点,不能带 /v1");
+        assert_eq!(meta.env_key, "GEMINI_API_KEY");
+        assert!(meta.env_key_aliases.contains(&"GOOGLE_API_KEY"),
+            "GOOGLE_API_KEY must remain a valid alias");
+
+        // 2. 内置模型:两个 gemini 模型,均走代理(无 Responses API)
+        let models = crate::types::builtin_models();
+        let g3 = models.iter().find(|m| m.slug == "gemini-3-flash-preview")
+            .expect("gemini-3-flash-preview must be builtin");
+        assert_eq!(g3.provider, "gemini");
+        assert!(!g3.native_responses, "gemini has no Responses API — must route via proxy");
+        let g25 = models.iter().find(|m| m.slug == "gemini-2.5-pro")
+            .expect("gemini-2.5-pro must be builtin");
+        assert_eq!(g25.provider, "gemini");
+        assert!(!g25.native_responses, "gemini has no Responses API — must route via proxy");
+
+        // 3. 别名后缀映射(决定 codex-gemini-flash / claude-gemini-pro 等别名)
+        assert_eq!(super::short("gemini-3-flash-preview"), "gemini-flash");
+        assert_eq!(super::short("gemini-2.5-pro"), "gemini-pro");
+        assert_eq!(super::codex_alias("gemini-3-flash-preview"), "codex-gemini-flash");
+        assert_eq!(super::codex_alias("gemini-2.5-pro"), "codex-gemini-pro");
+
+        // 4. 拼接出的上游端点必须与实测存在的 Gemini OpenAI 兼容端点一致
+        assert_eq!(
+            format!("{}/chat/completions", meta.base_url),
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        );
     }
 
     /// Manual "Apply" without the GUI: rewrites providers.json + shell aliases from

@@ -9,7 +9,7 @@ function providerLabel(p: string): string {
   const m: Record<string, string> = {
     deepseek: "DeepSeek", glm: "智谱 GLM", qwen: "阿里 Qwen-Max",
     qwen38: "阿里 Qwen3.8", xiaomi: "小米 MiMo",
-    anthropic: "Anthropic Opus", openai: "OpenAI GPT",
+    anthropic: "Anthropic Opus", openai: "OpenAI GPT", gemini: "Google Gemini",
   };
   return m[p] || p;
 }

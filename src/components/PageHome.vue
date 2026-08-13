@@ -49,11 +49,11 @@ function isAgentDirty(agentId: AgentId): boolean {
   const o = (config.value.agent_models[agentId] ?? []).slice().sort().join(',');
   const c = (workingModels.value[agentId] ?? []).slice().sort().join(',');
   if (o !== c) return true;
-  // compare model_routing for this agent's models
+  // compare model_routing (global, model-level) — any routing change counts
   const origR = config.value.model_routing ?? {};
   const curR = modelRouting.value;
-  const slugs = workingModels.value[agentId] ?? [];
-  for (const s of slugs) {
+  const allSlugs = new Set([...Object.keys(origR), ...Object.keys(curR)]);
+  for (const s of allSlugs) {
     if ((origR[s] ?? 'direct') !== (curR[s] ?? 'direct')) return true;
   }
   return false;
@@ -245,8 +245,8 @@ watch(config, () => { if (config.value) { initWorking(); } });
               <span v-if="checking" class="update-spin">⟳</span>
               <span v-else>检查模型更新</span>
             </button>
-            <!-- Proxied → 恢复按钮；Unproxied → 应用按钮 -->
-            <button v-if="agentProxied[selectedAgent.id]" class="agent-apply-btn restore-btn"
+            <!-- 已代理且无改动 → 恢复按钮；有改动或未代理 → 应用按钮 -->
+            <button v-if="agentProxied[selectedAgent.id] && !isAgentDirty(selectedAgent.id)" class="agent-apply-btn restore-btn"
               :disabled="restoringAgent !== null"
               @click="onRestoreAgent(selectedAgent.id)">
               <span v-if="restoringAgent === selectedAgent.id" class="apply-spin">⟳</span>

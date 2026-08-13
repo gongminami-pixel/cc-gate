@@ -35,6 +35,7 @@ async function saveApiKeys() {
 
 const relayPresets = [
   { name: "OpenRouter",   url: "https://openrouter.ai/api/v1", anthropicUrl: "" },
+  { name: "Gemini",       url: "https://generativelanguage.googleapis.com/v1beta/openai", anthropicUrl: "" },
 ];
 
 const editingRelay = ref<{ oldName: string; name: string; url: string; anthropicUrl: string; key: string; masked: boolean }>(
