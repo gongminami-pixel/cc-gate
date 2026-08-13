@@ -999,7 +999,9 @@ mod tests {
     fn bare_aliases_are_native_suffixed_stay_proxy() {
         use crate::types::AppConfig;
         let mut cfg = AppConfig::default();
-        cfg.agent_models.insert("codex_cli".into(), vec!["deepseek-v4-pro".into()]);
+        // deepseek-v4-pro has native_responses=true → codex-ds connects directly.
+        // glm-5.2 has native_responses=false → codex-glm still routes via mimo2codex :8688.
+        cfg.agent_models.insert("codex_cli".into(), vec!["deepseek-v4-pro".into(), "glm-5.2".into()]);
         cfg.agent_models.insert("claude_cli".into(), vec!["claude-opus-5".into(), "deepseek-v4-pro".into()]);
         cfg.agent_models.insert("aider".into(), vec!["deepseek-v4-pro".into()]);
         let mut out = String::new();
@@ -1018,8 +1020,21 @@ mod tests {
         assert!(!out.contains("alias aider='CC_GATE_MODEL="),
             "bare aider must not inject CC_GATE_MODEL:\n{out}");
 
-        // Suffixed aliases must still route through the local proxies.
-        assert!(out.contains("alias codex-ds='CC_GATE_MODEL="), "codex-ds must stay proxied:\n{out}");
+        // native_responses codex model → direct to provider Responses API, not via :8688.
+        let codex_ds = out.lines().find(|l| l.starts_with("alias codex-ds='")).unwrap();
+        assert!(codex_ds.contains("base_url=\"https://api.deepseek.com/v1\""),
+            "codex-ds must connect directly to DeepSeek:\n{codex_ds}");
+        assert!(!codex_ds.contains("127.0.0.1:8688"),
+            "codex-ds must NOT route via mimo2codex :8688:\n{codex_ds}");
+
+        // Non-native codex model → still routed through mimo2codex :8688.
+        let codex_glm = out.lines().find(|l| l.starts_with("alias codex-glm='")).unwrap();
+        assert!(codex_glm.contains("base_url=\"http://127.0.0.1:8688/v1\""),
+            "codex-glm must stay proxied via :8688:\n{codex_glm}");
+        assert!(codex_glm.contains("requires_openai_auth=\"false\""),
+            "codex-glm proxy alias must be zero-auth:\n{codex_glm}");
+
+        // Claude/aider suffixed aliases still route through their own proxies (unaffected by native_responses).
         assert!(out.contains("alias claude-ds='CC_GATE_MODEL="), "claude-ds must stay proxied:\n{out}");
         assert!(out.contains("alias aider-ds='CC_GATE_MODEL="), "aider-ds must stay proxied:\n{out}");
 

@@ -420,3 +420,15 @@ _Append-only. Newest at bottom. ISO8601 timestamps only._
 - **outcome**: L2 完整反映 v0.1.18 新包状态
 - **next**: git 本地提交 .harness/ + 源码改动
 
+
+## 2026-08-13T13:25:00+08:00 — work: 0.1.19 deepseek-v4-pro 原生 Responses + 版本号修复 + 双端构建
+- **touched**: src-tauri/src/types.rs src-tauri/src/config_writer.rs src-tauri/tauri.conf.json src-tauri/Cargo.toml src/components/Sidebar.vue src/components/PageStartup.vue scripts/release.sh
+- **action**: ①deepseek-v4-pro 设 native_responses=true（实测原生支持 Responses API，codex-ds 直连 api.deepseek.com）；②更新 bare_aliases 回归测试（codex-ds 直连、codex-glm 走代理）；③启动项 mimo2codex 说明文字修正为「仅非原生模型」；④Sidebar 左下角版本号硬编码 v0.1.0 改动态 getAppVersion()；⑤Cargo.toml version 0.1.2→0.1.19 同步；⑥双端构建 0.1.19（macOS 前台 + Windows VM）
+- **outcome**: cargo test 8 passed；双端产物 SHA256 已算；release.sh 已更新到 0.1.19
+- **next**: commit + push + release.sh 发布 v0.1.19
+
+## 2026-08-13T13:25:00+08:00 — handoff_ready: 0.1.19 发布前同步
+- **touched**: .harness/waypoints/2026-08-13T13-10-50+08:00.md .harness/handoff.md .harness/progress.md
+- **action**: 落 waypoint + 重写 handoff（0.1.19 状态：双端构建完成、SHA256 已算、待 commit+push+release）
+- **outcome**: L2 反映 0.1.19 发布前状态
+- **next**: git 提交 + push + bash scripts/release.sh

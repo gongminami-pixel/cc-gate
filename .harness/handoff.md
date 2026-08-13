@@ -1,10 +1,10 @@
 # Harness Handoff
 
-_Last updated: 2026-08-12T20:58:00+08:00_
+_Last updated: 2026-08-13T13:25:00+08:00_
 
 ## Goal
 
-构建 CC-Gate — Tauri 2 + Vue 3 桌面应用，统一管理 10 AI Agent 的模型/路由/Key/Shell。开源在 https://github.com/gongminami-pixel/cc-gate。当前 0.1.18 已发布：OpenCode 接入 + 检测修复 + 配置保留。
+构建 CC-Gate — Tauri 2 + Vue 3 桌面应用，统一管理 10 AI Agent 的模型/路由/Key/Shell。开源在 https://github.com/gongminami-pixel/cc-gate。当前 0.1.19 发布：deepseek-v4-pro 原生 Responses 支持 + 版本号显示修复。
 
 ## Context you must load
 
@@ -16,46 +16,39 @@ _Last updated: 2026-08-12T20:58:00+08:00_
 
 ## State snapshot
 
-- **Branch**: `main` @ `a214f3b` (docs: 同步记忆 — 0.1.18 发布终态 handoff + waypoint)
-- **Uncommitted**: `src-tauri/src/config_writer.rs`, `src-tauri/src/paths.rs` (worktree modified)
-- **Tag**: v0.1.18 (GitHub Release https://github.com/gongminami-pixel/cc-gate/releases/tag/v0.1.18)
-- **macOS DMG**: `CC-Gate_0.1.18_x64.dmg` (3.9MB) SHA256: `4c97e3ddff357160cd09a4c4060f17e8a9671f820a70cd483555c60bba1147eb`
-- **Windows exe**: `CC-Gate_0.1.18_x64-setup.exe` (2.9MB) SHA256: `3bacf5a2d45da94e697daee10809512ff35fb431f048756925145547c824065e`
-- **/Applications/CC-Gate.app**: 0.1.18 (旧版备份 .bak-20260811-102433/-111351/-113107)
-- **Release SHA256 updated**: 2026-08-12 — 两个新构建的包上传到 GitHub Release v0.1.18，SHA256 已同步更新
+- **Branch**: `main` @ `53fc5d1`（同步前 HEAD）
+- **Uncommitted**: `types.rs`、`config_writer.rs`、`tauri.conf.json`、`Cargo.toml`、`Sidebar.vue`、`PageStartup.vue`、`scripts/release.sh`、`.harness/`
+- **Version**: 0.1.19（tauri.conf.json + Cargo.toml 已同步）
+- **macOS DMG**: `CC-Gate_0.1.19_x64.dmg` SHA256 `a8a875bfc1396e96a38025e51cfb2f4913a561c9040a9ce6d3b0e03ee6ff4ebf`
+- **Windows exe**: `CC-Gate_0.1.19_x64-setup.exe` SHA256 `67be4d552f8d3f433df664d91e46405608262b2eaff8b3981cd970befcb36d3e`
 
 ## What works / what's broken
 
-- ✅ 9 agent 全部可代理且检测正确（full_apply_all_agents_proxied 回归测试常驻）
-- ✅ 本机配置全部为 cc-gate 写入状态
-- ✅ v0.1.18 Release 双包 + SHA256 全部正确
-- ✅ OpenCode 配置写入 + 检测修复
-- ✅ codex config 保留用户 [projects] 与 [mcp_servers] 段
-- ✅ JSONC 解析 = 官方 json5 crate
-- ⚠️ `src-tauri/src/config_writer.rs` 和 `src-tauri/src/paths.rs` 有未提交改动（worktree modified）
+- ✅ deepseek-v4-pro 原生 Responses API（curl /v1/responses + codex exec 直连均验证通过）
+- ✅ cargo check 0 errors / cargo test 8 passed
+- ✅ 双端构建 0.1.19 完成（含版本号修复）
+- ✅ Sidebar 左下角版本号动态读取（getAppVersion），不再硬编码 v0.1.0
+- ⚠️ mimo2codex(8688) 仍保留 —— GLM/Qwen/MiMo 无 Responses 接口，经 Codex 时仍需翻译
 
 ## Next actions
 
-1. 本地提交 uncommitted 的 `config_writer.rs` + `paths.rs` 改动（需确认改动内容）
-2. 本地提交 `.harness/` 本次 sync 更新
-3. `git push` 推送到 origin/main（开源项目，同步后必须 push）
-4. 若用户需要进一步修改 → 0.1.19
+1. commit 所有改动 + `git push` 推送到 origin/main
+2. `bash scripts/release.sh` 发布 v0.1.19
 
 ## Open questions
 
-- `config_writer.rs` 和 `paths.rs` 的未提交改动是什么内容？（可能来自上次发布后的微调）
+- 无
 
 ## Key Decisions (latest)
 
-- 0.1.18 三个候选一次性实现 + 自动化测试 + 发布
-- JSONC 解析换官方 json5 crate
-- OpenCode 路径修正为 ~/.config/opencode/opencode.jsonc
-- write_codex_config 用 toml crate 解析保留 [projects.*]/[mcp_servers.*]
-- 发布顺序：先 commit+push 再 release.sh（v0.1.18 tag 指向 bed4dd5 正确）
-- 下载页 SHA256 每次发版上传安装包后必同步（全局 CLAUDE.md 总则）
+- deepseek-v4-pro 设 native_responses=true（2026-08-13 实测原生支持 Responses API）
+- mimo2codex 不删 —— GLM/Qwen/MiMo 仍走 8688（GLM /responses 实测 404）
+- Sidebar 版本号硬编码 v0.1.0 → 动态 getAppVersion()；Cargo.toml version 同步 0.1.19（消除与 tauri.conf.json 脱节）
+- 启动项 mimo2codex 说明文字修正为「仅非原生模型」
 
 ## Beware
 
 - 开源项目 — 同步提交后必须 `git push` 推送到 origin/main
-- `gh release upload --clobber` 是替换 GitHub Release 资产的安全方式（比 delete+recreate 少拦截）
 - 双端构建：Windows 包在 Mac Parallels VM 里用 `cmd /c` 构建，绝不在 Mac 上跑 cargo-xwin
+- macOS tauri build 后台跑会卡在文件锁（cargo 被孤立），前台跑才稳；Windows 后台 SSH 构建同样会孤立（rustc 继续在 VM 上编译，需轮询 tasklist 等完成）
+- 版本号三处：tauri.conf.json（bundle 命名 + package_info.version，UI getAppVersion 读它）、Cargo.toml（crate version）、package.json（前端 npm 版本，与 app 显示无关）

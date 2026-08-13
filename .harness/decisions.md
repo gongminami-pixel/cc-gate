@@ -133,3 +133,17 @@ _Append-only. Each entry captures the "why" behind a choice._
 **Alternatives**: 改全局 CLAUDE.md ——但那是用户所有项目的通用规则，不能为单项目改动
 **Supersedes**: 全局 CLAUDE.md "同步加提交=永不 push"（仅限本项目覆盖）
 **Impact**: 每次"同步加提交"后，若用户未明确说"只本地"，需主动 push 到 origin/main
+
+## 2026-08-13T13:25:00+08:00 — deepseek-v4-pro 原生 Responses，mimo2codex 保留
+**Why**: deepseek-v4-pro 实测已原生支持 Responses API（curl /v1/responses + codex exec 直连通过），不再需要 mimo2codex 做 Responses→Chat 翻译
+**What**: types.rs 里 deepseek-v4-pro 设 native_responses=true；codex-ds 别名直连 api.deepseek.com
+**Evidence**: curl /v1/responses 返回 object:response；codex exec 直连返回 OK
+**Supersedes**: 旧「deepseek-v4-pro 走代理模式」（cc-gate skill DeepSeek 连接模式表）
+**Impact**: mimo2codex(8688) 不删除——GLM/Qwen/MiMo 无 Responses 接口（GLM /responses 实测 404），经 Codex 时仍需 8688 翻译
+
+## 2026-08-13T13:25:00+08:00 — 版本号三处同步 + Sidebar 动态读取
+**Why**: Sidebar 左下角硬编码 v0.1.0（从未跟版本走）；Cargo.toml version 停在 0.1.2 与 tauri.conf.json 脱节
+**What**: Sidebar 改 getAppVersion()（读 package_info.version = tauri.conf.json version）；Cargo.toml version 同步 0.1.19
+**Evidence**: src/components/Sidebar.vue:33 原硬编码 v0.1.0；App.vue 里 'settings' 页 = PageAbout
+**Supersedes**: 硬编码版本号
+**Impact**: 后续发版只需改 tauri.conf.json + Cargo.toml 两处，UI 自动显示

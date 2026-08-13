@@ -1,6 +1,14 @@
 <script setup lang="ts">
+import { onMounted, ref } from "vue";
+import { getAppVersion } from "../ipc/api";
+
 defineProps<{ current: string }>();
 const emit = defineEmits<(e: "navigate", page: string) => void>();
+
+const version = ref("…");
+onMounted(async () => {
+  try { version.value = await getAppVersion(); } catch { version.value = "unknown"; }
+});
 
 const nav = [
   { id: "home",       label: "首页",          icon: "⌂" },
@@ -30,7 +38,7 @@ const nav = [
       </div>
     </nav>
     <div class="sidebar-footer">
-      <div class="nav-item" @click="emit('navigate', 'settings')">v0.1.0</div>
+      <div class="nav-item" @click="emit('navigate', 'settings')">v{{ version }}</div>
     </div>
   </aside>
 </template>

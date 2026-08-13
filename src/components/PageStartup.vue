@@ -43,7 +43,7 @@ async function onProxyAction(name: string, running: boolean) {
 const STATUSBAR_META: { name: string; key: string; port: number; label: string; desc: string }[] = [
   {
     name: "mimo2codex", key: "mimo2codex", port: 8688, label: "mimo2codex",
-    desc: "协议转换 — 把 Responses API 转为 Chat Completions，供 Codex CLI、Codex Desktop、Reasonix 使用",
+    desc: "协议转换 — 把 Responses API 转为 Chat Completions，供 Codex CLI / Desktop / Reasonix 走非原生模型（GLM / Qwen / MiMo）时使用",
   },
   {
     name: "claude-proxy", key: "claude-proxy", port: 8689, label: "claude-proxy",

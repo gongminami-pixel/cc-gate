@@ -10,10 +10,10 @@ if [ -z "$TOKEN" ]; then
 fi
 
 REPO="gongminami-pixel/cc-gate"
-TAG="v0.1.18"
-VERSION="0.1.18"
-DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.18_x64.dmg"
-EXE="/tmp/CC-Gate_0.1.18_x64-setup.exe"
+TAG="v0.1.19"
+VERSION="0.1.19"
+DMG="src-tauri/target/release/bundle/dmg/CC-Gate_0.1.19_x64.dmg"
+EXE="/tmp/CC-Gate_0.1.19_x64-setup.exe"
 MAC_SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
 WIN_SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
 
@@ -52,6 +52,12 @@ shasum -a 256 CC-Gate_${VERSION}_x64.dmg
 # Windows (PowerShell)
 Get-FileHash CC-Gate_${VERSION}_x64-setup.exe -Algorithm SHA256
 \`\`\`
+
+### Changes (v0.1.19)
+
+- 新增：deepseek-v4-pro 原生 Responses API 支持（native_responses=true）—— codex-ds 别名直连 api.deepseek.com，绕过 mimo2codex，不再做 Responses→Chat 翻译
+- 修正：启动项 mimo2codex 说明文字 —— 明确其仅服务非原生模型（GLM / Qwen / MiMo）经 Codex 时使用
+- 测试：更新 bare_aliases 回归测试，断言 codex-ds 直连（不含 8688）、codex-glm 仍走代理
 
 ### Changes (v0.1.18)
 
