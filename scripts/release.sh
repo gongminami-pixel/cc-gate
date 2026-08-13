@@ -2,9 +2,9 @@
 # CC-Gate release script - creates GitHub Release + uploads Mac DMG + Windows exe
 set -e
 
-TOKEN=$(security find-internet-password -s github.com -w 2>/dev/null)
+TOKEN=$(gh auth token 2>/dev/null || security find-internet-password -s github.com -w 2>/dev/null)
 if [ -z "$TOKEN" ]; then
-  echo "GitHub token not found in keychain, enter manually:"
+  echo "GitHub token not found, enter manually:"
   read -s -p "GitHub token: " TOKEN
   echo
 fi
@@ -55,6 +55,7 @@ Get-FileHash CC-Gate_${VERSION}_x64-setup.exe -Algorithm SHA256
 
 ### Changes (v0.1.20)
 
+- 新增：支持 Google Gemini 直连 —— 内置 gemini-3-flash-preview / gemini-2.5-pro 模型，走官方 OpenAI 兼容端点（generativelanguage.googleapis.com/v1beta/openai），填 GEMINI_API_KEY 即可在 Claude Code / Codex / Hermes 中选用；中转站新增 Gemini 预设，学生/新机器零配置开箱即用
 - 修复：首页切换模型时，复选框 / 路由下拉框变动后「恢复」按钮自动变为「应用」（dirty 检测覆盖路由下拉框与未勾选模型）
 - 重构：版本号单一来源，以 Cargo.toml 为准 —— tauri.conf.json 删 version 自动 fallback，发版只改一处；Sidebar 左下角版本号动态读取
 
